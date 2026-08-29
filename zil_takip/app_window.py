@@ -16,6 +16,14 @@ APP_TITLE = "Ceselsan Zil Takip Programı"
 DAY_NAMES = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
 DAY_SHORT = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
 
+ACCENT = "#2f6f4f"
+ACCENT_DARK = "#1f4a34"
+BG = "#f4f6f5"
+ROW_ODD = "#e9efec"
+ROW_EVEN = "#ffffff"
+FONT = ("Segoe UI", 10)
+FONT_BOLD = ("Segoe UI", 10, "bold")
+
 
 def format_days(days: list[int]) -> str:
     return ", ".join(DAY_SHORT[d] for d in sorted(days)) if days else "-"
@@ -27,12 +35,17 @@ def format_sound(sound: Optional[str]) -> str:
     return sound
 
 
+def format_direction(direction: str) -> str:
+    return "Önce" if direction != "after" else "Sonra"
+
+
 class EntryDialog(tk.Toplevel):
     """Zil programına yeni kayıt ekleme / düzenleme penceresi."""
 
     def __init__(self, parent, entry: Optional[dict] = None):
         super().__init__(parent)
         self.title("Zil Kaydı")
+        self.configure(bg=BG)
         self.resizable(False, False)
         self.result: Optional[dict] = None
         self.transient(parent)
@@ -71,7 +84,7 @@ class EntryDialog(tk.Toplevel):
         ttk.Label(self, text="Ses dosyası:").grid(row=row, column=0, sticky="w", **pad)
         ttk.Entry(self, textvariable=self.sound_var, width=32).grid(
             row=row, column=1, columnspan=2, sticky="we", **pad)
-        ttk.Button(self, text="Seç...", command=self._choose_sound).grid(
+        ttk.Button(self, text="📁 Seç...", command=self._choose_sound).grid(
             row=row, column=3, sticky="w", **pad)
         row += 1
         ttk.Label(self, text="Boş bırakılırsa Ses Ayarları'ndaki varsayılan ses çalınır.",
@@ -84,7 +97,8 @@ class EntryDialog(tk.Toplevel):
 
         btn_frame = ttk.Frame(self)
         btn_frame.grid(row=row, column=0, columnspan=4, pady=10)
-        ttk.Button(btn_frame, text="Kaydet", command=self._on_save).pack(side="left", padx=6)
+        ttk.Button(btn_frame, text="💾 Kaydet", style="Accent.TButton",
+                   command=self._on_save).pack(side="left", padx=6)
         ttk.Button(btn_frame, text="İptal", command=self.destroy).pack(side="left", padx=6)
 
         self.existing_id = entry.get("id")
@@ -120,11 +134,12 @@ class EntryDialog(tk.Toplevel):
 
 
 class OffsetDialog(tk.Toplevel):
-    """Cuma namazı öncesi zil süresini ekleme/düzenleme penceresi."""
+    """Cuma namazına göre (öncesi/sonrası) çalınacak zil ekleme/düzenleme penceresi."""
 
     def __init__(self, parent, offset: Optional[dict] = None):
         super().__init__(parent)
-        self.title("Cuma Namazı Zil Süresi")
+        self.title("Cuma Namazı Zil Zamanı")
+        self.configure(bg=BG)
         self.resizable(False, False)
         self.result: Optional[dict] = None
         self.transient(parent)
@@ -132,6 +147,7 @@ class OffsetDialog(tk.Toplevel):
 
         offset = offset or {}
         self.minutes_var = tk.IntVar(value=offset.get("minutes", 15))
+        self.direction_var = tk.StringVar(value=offset.get("direction", "before"))
         self.label_var = tk.StringVar(value=offset.get("label", ""))
         self.enabled_var = tk.BooleanVar(value=offset.get("enabled", True))
         existing_sound = offset.get("sound")
@@ -139,28 +155,37 @@ class OffsetDialog(tk.Toplevel):
             value="" if not existing_sound or existing_sound == "default" else existing_sound)
 
         pad = {"padx": 10, "pady": 6}
-        ttk.Label(self, text="Namazdan kaç dakika önce:").grid(row=0, column=0, sticky="w", **pad)
+        ttk.Label(self, text="Kaç dakika:").grid(row=0, column=0, sticky="w", **pad)
         ttk.Spinbox(self, from_=1, to=180, textvariable=self.minutes_var, width=8).grid(
             row=0, column=1, sticky="w", **pad)
 
-        ttk.Label(self, text="Etiket:").grid(row=1, column=0, sticky="w", **pad)
-        ttk.Entry(self, textvariable=self.label_var, width=32).grid(
-            row=1, column=1, columnspan=2, sticky="we", **pad)
+        direction_frame = ttk.Frame(self)
+        direction_frame.grid(row=1, column=0, columnspan=3, sticky="w", padx=10, pady=(0, 6))
+        ttk.Radiobutton(direction_frame, text="Namazdan Önce (uyarı zili)",
+                         variable=self.direction_var, value="before").pack(
+            side="left", padx=(0, 16))
+        ttk.Radiobutton(direction_frame, text="Namazdan Sonra (örn. mesaiye dönüş)",
+                         variable=self.direction_var, value="after").pack(side="left")
 
-        ttk.Label(self, text="Ses dosyası:").grid(row=2, column=0, sticky="w", **pad)
+        ttk.Label(self, text="Etiket:").grid(row=2, column=0, sticky="w", **pad)
+        ttk.Entry(self, textvariable=self.label_var, width=36).grid(
+            row=2, column=1, columnspan=2, sticky="we", **pad)
+
+        ttk.Label(self, text="Ses dosyası:").grid(row=3, column=0, sticky="w", **pad)
         ttk.Entry(self, textvariable=self.sound_var, width=28).grid(
-            row=2, column=1, sticky="we", **pad)
-        ttk.Button(self, text="Seç...", command=self._choose_sound).grid(
-            row=2, column=2, sticky="w", **pad)
+            row=3, column=1, sticky="we", **pad)
+        ttk.Button(self, text="📁 Seç...", command=self._choose_sound).grid(
+            row=3, column=2, sticky="w", **pad)
         ttk.Label(self, text="Boş bırakılırsa Ses Ayarları'ndaki varsayılan ses çalınır.",
-                  foreground="#666666").grid(row=3, column=0, columnspan=3, sticky="w", padx=10)
+                  foreground="#666666").grid(row=4, column=0, columnspan=3, sticky="w", padx=10)
 
         ttk.Checkbutton(self, text="Etkin", variable=self.enabled_var).grid(
-            row=4, column=0, columnspan=2, sticky="w", **pad)
+            row=5, column=0, columnspan=2, sticky="w", **pad)
 
         btn_frame = ttk.Frame(self)
-        btn_frame.grid(row=5, column=0, columnspan=3, pady=10)
-        ttk.Button(btn_frame, text="Kaydet", command=self._on_save).pack(side="left", padx=6)
+        btn_frame.grid(row=6, column=0, columnspan=3, pady=10)
+        ttk.Button(btn_frame, text="💾 Kaydet", style="Accent.TButton",
+                   command=self._on_save).pack(side="left", padx=6)
         ttk.Button(btn_frame, text="İptal", command=self.destroy).pack(side="left", padx=6)
 
     def _choose_sound(self) -> None:
@@ -172,9 +197,12 @@ class OffsetDialog(tk.Toplevel):
 
     def _on_save(self) -> None:
         minutes = self.minutes_var.get()
-        label = self.label_var.get().strip() or f"Cuma Namazı - {minutes} dk kala"
+        direction = self.direction_var.get()
+        direction_text = "dk kala" if direction == "before" else "dk sonra"
+        label = self.label_var.get().strip() or f"Cuma Namazı - {minutes} {direction_text}"
         self.result = {
             "minutes": minutes,
+            "direction": direction,
             "label": label,
             "enabled": self.enabled_var.get(),
             "sound": self.sound_var.get().strip() or "default",
@@ -186,8 +214,11 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(APP_TITLE)
-        self.geometry("780x560")
-        self.minsize(700, 500)
+        self.geometry("860x660")
+        self.minsize(760, 560)
+        self.configure(bg=BG)
+
+        self._setup_style()
 
         self.cfg = load_config()
 
@@ -195,6 +226,7 @@ class App(tk.Tk):
         self._refresh_entries_tree()
         self._refresh_offsets_tree()
         self._refresh_devices()
+        self._update_clock()
 
         self.scheduler = BellScheduler(get_config=lambda: self.cfg, on_log=self._log)
         self.scheduler.start()
@@ -203,6 +235,40 @@ class App(tk.Tk):
 
         if not self.cfg.get("default_sound"):
             self.after(300, self._prompt_first_run_sound)
+
+    # ---------- Görsel tema ----------
+    def _setup_style(self) -> None:
+        style = ttk.Style(self)
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+
+        style.configure("TFrame", background=BG)
+        style.configure("TLabelframe", background=BG, bordercolor="#c9d3ce")
+        style.configure("TLabelframe.Label", background=BG, font=FONT_BOLD, foreground=ACCENT_DARK)
+        style.configure("TLabel", background=BG, font=FONT)
+        style.configure("TCheckbutton", background=BG, font=FONT)
+        style.configure("TRadiobutton", background=BG, font=FONT)
+        style.configure("TNotebook", background=BG, tabmargins=(4, 6, 4, 0))
+        style.configure("TNotebook.Tab", font=FONT_BOLD, padding=(14, 8))
+        style.map("TNotebook.Tab", background=[("selected", ACCENT)],
+                  foreground=[("selected", "white")])
+        style.configure("TButton", font=FONT, padding=6)
+        style.configure("Accent.TButton", font=FONT_BOLD, padding=6,
+                         background=ACCENT, foreground="white")
+        style.map("Accent.TButton", background=[("active", ACCENT_DARK)])
+        style.configure("Header.TFrame", background=ACCENT_DARK)
+        style.configure("HeaderTitle.TLabel", background=ACCENT_DARK, foreground="white",
+                         font=("Segoe UI", 16, "bold"))
+        style.configure("HeaderSubtitle.TLabel", background=ACCENT_DARK, foreground="#cfe8da",
+                         font=("Segoe UI", 9))
+        style.configure("HeaderClock.TLabel", background=ACCENT_DARK, foreground="white",
+                         font=("Segoe UI", 12, "bold"))
+        style.configure("Treeview", rowheight=26, font=FONT, fieldbackground="white")
+        style.configure("Treeview.Heading", font=FONT_BOLD)
+        style.map("Treeview", background=[("selected", ACCENT)],
+                  foreground=[("selected", "white")])
 
     def _prompt_first_run_sound(self) -> None:
         messagebox.showinfo(
@@ -214,24 +280,51 @@ class App(tk.Tk):
 
     # ---------- UI kurulumu ----------
     def _build_ui(self) -> None:
+        self._build_header()
+
         notebook = ttk.Notebook(self)
-        notebook.pack(fill="both", expand=True, padx=8, pady=8)
+        notebook.pack(fill="both", expand=True, padx=10, pady=(6, 10))
 
         self.entries_tab = ttk.Frame(notebook)
         self.friday_tab = ttk.Frame(notebook)
         self.audio_tab = ttk.Frame(notebook)
-        notebook.add(self.entries_tab, text="Zil Programı")
-        notebook.add(self.friday_tab, text="Cuma Namazı")
-        notebook.add(self.audio_tab, text="Ses Ayarları")
+        notebook.add(self.entries_tab, text="🔔 Zil Programı")
+        notebook.add(self.friday_tab, text="🕌 Cuma Namazı")
+        notebook.add(self.audio_tab, text="🔊 Ses Ayarları")
 
         self._build_entries_tab()
         self._build_friday_tab()
         self._build_audio_tab()
 
-        log_frame = ttk.LabelFrame(self, text="Kayıtlar")
-        log_frame.pack(fill="both", expand=False, padx=8, pady=(0, 8))
-        self.log_text = tk.Text(log_frame, height=7, state="disabled", wrap="word")
+        log_frame = ttk.LabelFrame(self, text="📋 Kayıtlar")
+        log_frame.pack(fill="both", expand=False, padx=10, pady=(0, 10))
+        self.log_text = tk.Text(log_frame, height=7, state="disabled", wrap="word",
+                                 bg="white", relief="flat", font=("Consolas", 9))
         self.log_text.pack(fill="both", expand=True, padx=6, pady=6)
+        self.log_text.tag_configure("ring", foreground=ACCENT_DARK, font=("Consolas", 9, "bold"))
+        self.log_text.tag_configure("error", foreground="#b3261e")
+        self.log_text.tag_configure("info", foreground="#555555")
+
+    def _build_header(self) -> None:
+        header = ttk.Frame(self, style="Header.TFrame")
+        header.pack(fill="x")
+
+        title_box = ttk.Frame(header, style="Header.TFrame")
+        title_box.pack(side="left", padx=18, pady=12)
+        ttk.Label(title_box, text="🔔 Ceselsan Zil Takip Programı",
+                  style="HeaderTitle.TLabel").pack(anchor="w")
+        ttk.Label(title_box, text="Okul / Kurum Zil ve Cuma Namazı Otomasyonu",
+                  style="HeaderSubtitle.TLabel").pack(anchor="w")
+
+        self.clock_var = tk.StringVar()
+        ttk.Label(header, textvariable=self.clock_var, style="HeaderClock.TLabel").pack(
+            side="right", padx=18)
+
+    def _update_clock(self) -> None:
+        now = datetime.now()
+        gun = DAY_NAMES[now.weekday()]
+        self.clock_var.set(f"{now.strftime('%d.%m.%Y')}  {gun}   {now.strftime('%H:%M:%S')}")
+        self.after(1000, self._update_clock)
 
     def _build_entries_tab(self) -> None:
         frame = self.entries_tab
@@ -239,18 +332,22 @@ class App(tk.Tk):
         self.entries_tree = ttk.Treeview(frame, columns=columns, show="headings", height=12)
         headers = {"enabled": "Etkin", "label": "Etiket", "time": "Saat",
                    "days": "Günler", "sound": "Ses"}
-        widths = {"enabled": 60, "label": 200, "time": 70, "days": 160, "sound": 200}
+        widths = {"enabled": 60, "label": 220, "time": 70, "days": 160, "sound": 220}
         for col in columns:
             self.entries_tree.heading(col, text=headers[col])
             self.entries_tree.column(col, width=widths[col], anchor="w")
+        self.entries_tree.tag_configure("oddrow", background=ROW_ODD)
+        self.entries_tree.tag_configure("evenrow", background=ROW_EVEN)
         self.entries_tree.pack(fill="both", expand=True, padx=8, pady=8)
 
         btn_frame = ttk.Frame(frame)
         btn_frame.pack(fill="x", padx=8, pady=(0, 8))
-        ttk.Button(btn_frame, text="Ekle", command=self._add_entry).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Düzenle", command=self._edit_entry).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Sil", command=self._delete_entry).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Şimdi Çal (Test)", command=self._test_entry).pack(
+        ttk.Button(btn_frame, text="➕ Ekle", style="Accent.TButton",
+                   command=self._add_entry).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="✏️ Düzenle", command=self._edit_entry).pack(
+            side="left", padx=4)
+        ttk.Button(btn_frame, text="🗑️ Sil", command=self._delete_entry).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="▶ Şimdi Çal (Test)", command=self._test_entry).pack(
             side="left", padx=4)
 
     def _build_friday_tab(self) -> None:
@@ -261,7 +358,7 @@ class App(tk.Tk):
         top.pack(fill="x", padx=8, pady=8)
 
         self.friday_enabled_var = tk.BooleanVar(value=fp.get("enabled", True))
-        ttk.Checkbutton(top, text="Cuma namazı öncesi otomatik zil çalsın",
+        ttk.Checkbutton(top, text="Cuma namazı vaktine göre otomatik zil çalsın",
                          variable=self.friday_enabled_var,
                          command=self._save_friday_settings).pack(anchor="w")
 
@@ -272,34 +369,46 @@ class App(tk.Tk):
         city_entry = ttk.Entry(city_frame, textvariable=self.city_var, width=25)
         city_entry.pack(side="left", padx=8)
         city_entry.bind("<FocusOut>", lambda e: self._save_friday_settings())
-        ttk.Button(city_frame, text="Kaydet", command=self._save_friday_settings).pack(
+        ttk.Button(city_frame, text="💾 Kaydet", command=self._save_friday_settings).pack(
             side="left", padx=4)
-        ttk.Button(city_frame, text="Cuma Vaktini Göster",
+        ttk.Button(city_frame, text="🕌 Cuma Vaktini Göster",
                    command=self._show_friday_time).pack(side="left", padx=12)
 
         self.friday_info_var = tk.StringVar(value="")
-        ttk.Label(top, textvariable=self.friday_info_var, foreground="#1a6b1a").pack(
-            anchor="w", pady=(4, 0))
+        ttk.Label(top, textvariable=self.friday_info_var, foreground=ACCENT_DARK,
+                  wraplength=780, justify="left").pack(anchor="w", pady=(4, 0))
 
-        offsets_frame = ttk.LabelFrame(frame, text="Namazdan önce çalınacak ziller")
+        offsets_frame = ttk.LabelFrame(
+            frame, text="Namaz vaktine göre çalınacak ziller (öncesi / sonrası)")
         offsets_frame.pack(fill="both", expand=True, padx=8, pady=8)
 
-        columns = ("enabled", "minutes", "label", "sound")
+        ttk.Label(offsets_frame,
+                  text="Örn: namazdan 30 dk ve 15 dk önce uyarı zili; namazdan 30 dk sonra "
+                       "mesaiye dönüş zili gibi, şirketinize/kurumunuza göre istediğiniz kadar "
+                       "kayıt ekleyebilirsiniz.",
+                  foreground="#666666", wraplength=780, justify="left").pack(
+            anchor="w", padx=8, pady=(6, 0))
+
+        columns = ("enabled", "direction", "minutes", "label", "sound")
         self.offsets_tree = ttk.Treeview(offsets_frame, columns=columns, show="headings",
                                           height=6)
-        headers = {"enabled": "Etkin", "minutes": "Kaç dk önce", "label": "Etiket",
-                   "sound": "Ses"}
-        widths = {"enabled": 60, "minutes": 90, "label": 220, "sound": 200}
+        headers = {"enabled": "Etkin", "direction": "Yön", "minutes": "Dakika",
+                   "label": "Etiket", "sound": "Ses"}
+        widths = {"enabled": 60, "direction": 70, "minutes": 70, "label": 260, "sound": 180}
         for col in columns:
             self.offsets_tree.heading(col, text=headers[col])
             self.offsets_tree.column(col, width=widths[col], anchor="w")
+        self.offsets_tree.tag_configure("oddrow", background=ROW_ODD)
+        self.offsets_tree.tag_configure("evenrow", background=ROW_EVEN)
         self.offsets_tree.pack(fill="both", expand=True, padx=8, pady=8)
 
         btn_frame = ttk.Frame(offsets_frame)
         btn_frame.pack(fill="x", padx=8, pady=(0, 8))
-        ttk.Button(btn_frame, text="Ekle", command=self._add_offset).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Düzenle", command=self._edit_offset).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="Sil", command=self._delete_offset).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="➕ Ekle", style="Accent.TButton",
+                   command=self._add_offset).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="✏️ Düzenle", command=self._edit_offset).pack(
+            side="left", padx=4)
+        ttk.Button(btn_frame, text="🗑️ Sil", command=self._delete_offset).pack(side="left", padx=4)
 
     def _build_audio_tab(self) -> None:
         frame = self.audio_tab
@@ -311,14 +420,15 @@ class App(tk.Tk):
                                           state="readonly")
         self.device_combo.grid(row=0, column=1, sticky="we", **pad)
         self.device_combo.bind("<<ComboboxSelected>>", lambda e: self._save_device())
-        ttk.Button(frame, text="Cihazları Yenile", command=self._refresh_devices).grid(
+        ttk.Button(frame, text="🔄 Cihazları Yenile", command=self._refresh_devices).grid(
             row=0, column=2, sticky="w", **pad)
 
         ttk.Label(frame, text="Çalınacak zil sesi:").grid(row=1, column=0, sticky="w", **pad)
-        self.default_sound_var = tk.StringVar(value=self.cfg.get("default_sound") or "(Seçilmedi - lütfen bir ses dosyası seçin)")
+        self.default_sound_var = tk.StringVar(
+            value=self.cfg.get("default_sound") or "(Seçilmedi - lütfen bir ses dosyası seçin)")
         ttk.Entry(frame, textvariable=self.default_sound_var, width=40, state="readonly").grid(
             row=1, column=1, sticky="we", **pad)
-        ttk.Button(frame, text="Seç...", command=self._choose_default_sound).grid(
+        ttk.Button(frame, text="📁 Seç...", command=self._choose_default_sound).grid(
             row=1, column=2, sticky="w", **pad)
 
         ttk.Label(frame, text="Ses seviyesi:").grid(row=2, column=0, sticky="w", **pad)
@@ -327,8 +437,8 @@ class App(tk.Tk):
                                   orient="horizontal", command=lambda v: self._save_volume())
         volume_scale.grid(row=2, column=1, sticky="we", **pad)
 
-        ttk.Button(frame, text="Test Sesi Çal", command=self._test_default_sound).grid(
-            row=3, column=1, sticky="w", **pad)
+        ttk.Button(frame, text="🔊 Test Sesi Çal", style="Accent.TButton",
+                   command=self._test_default_sound).grid(row=3, column=1, sticky="w", **pad)
 
         frame.columnconfigure(1, weight=1)
 
@@ -336,8 +446,14 @@ class App(tk.Tk):
     def _log(self, message: str) -> None:
         def append():
             timestamp = datetime.now().strftime("%H:%M:%S")
+            if message.startswith("Zil çalıyor"):
+                tag = "ring"
+            elif "hata" in message.lower() or "alınamadı" in message.lower():
+                tag = "error"
+            else:
+                tag = "info"
             self.log_text.configure(state="normal")
-            self.log_text.insert("end", f"[{timestamp}] {message}\n")
+            self.log_text.insert("end", f"[{timestamp}] {message}\n", tag)
             self.log_text.see("end")
             self.log_text.configure(state="disabled")
         try:
@@ -351,8 +467,9 @@ class App(tk.Tk):
     # ---------- Zil programı sekmesi ----------
     def _refresh_entries_tree(self) -> None:
         self.entries_tree.delete(*self.entries_tree.get_children())
-        for entry in self.cfg["entries"]:
-            self.entries_tree.insert("", "end", iid=entry["id"], values=(
+        for i, entry in enumerate(self.cfg["entries"]):
+            tag = "evenrow" if i % 2 == 0 else "oddrow"
+            self.entries_tree.insert("", "end", iid=entry["id"], tags=(tag,), values=(
                 "Evet" if entry.get("enabled", True) else "Hayır",
                 entry.get("label", ""),
                 entry.get("time", ""),
@@ -409,8 +526,10 @@ class App(tk.Tk):
     def _refresh_offsets_tree(self) -> None:
         self.offsets_tree.delete(*self.offsets_tree.get_children())
         for i, offset in enumerate(self.cfg["friday_prayer"]["offsets"]):
-            self.offsets_tree.insert("", "end", iid=str(i), values=(
+            tag = "evenrow" if i % 2 == 0 else "oddrow"
+            self.offsets_tree.insert("", "end", iid=str(i), tags=(tag,), values=(
                 "Evet" if offset.get("enabled", True) else "Hayır",
+                format_direction(offset.get("direction", "before")),
                 offset.get("minutes", 0),
                 offset.get("label", ""),
                 format_sound(offset.get("sound")),
@@ -436,8 +555,12 @@ class App(tk.Tk):
         parts = [f"{target_date.strftime('%d.%m.%Y')} Cuma günü öğle/Cuma vakti: {dhuhr_time}"]
         for offset in self.cfg["friday_prayer"]["offsets"]:
             if offset.get("enabled", True):
-                ring_time = prayer_service.compute_offset_time(dhuhr_time, offset["minutes"])
-                parts.append(f"{offset['minutes']} dk önce ({ring_time}) - {offset.get('label', '')}")
+                direction = offset.get("direction", "before")
+                ring_time = prayer_service.compute_relative_time(
+                    dhuhr_time, offset["minutes"], direction)
+                yon = "önce" if direction == "before" else "sonra"
+                parts.append(
+                    f"{offset['minutes']} dk {yon} ({ring_time}) - {offset.get('label', '')}")
         self.friday_info_var.set("  |  ".join(parts))
 
     def _selected_offset_index(self) -> Optional[int]:

@@ -99,14 +99,16 @@ class BellScheduler(threading.Thread):
             if not offset.get("enabled", True):
                 continue
             minutes = offset.get("minutes", 0)
-            target_hhmm = prayer_service.compute_offset_time(dhuhr_time, minutes)
+            direction = offset.get("direction", "before")
+            target_hhmm = prayer_service.compute_relative_time(dhuhr_time, minutes, direction)
             if target_hhmm != current_hhmm:
                 continue
-            fire_key = f"friday:{minutes}:{today.isoformat()}"
+            fire_key = f"friday:{direction}:{minutes}:{today.isoformat()}"
             if fire_key in self._fired_today:
                 continue
             self._fired_today.add(fire_key)
-            label = offset.get("label") or f"Cuma Namazı - {minutes} dk kala"
+            direction_text = "kala" if direction == "before" else "sonra"
+            label = offset.get("label") or f"Cuma Namazı - {minutes} dk {direction_text}"
             self._ring(label, offset.get("sound"), cfg)
 
     def _ring(self, label: str, sound: Optional[str], cfg: dict) -> None:

@@ -49,10 +49,12 @@ def default_config() -> dict[str, Any]:
             "city": "İstanbul",
             "country": "Turkey",
             "offsets": [
-                {"minutes": 30, "enabled": True, "sound": "default",
+                {"minutes": 30, "direction": "before", "enabled": True, "sound": "default",
                  "label": "Cuma Namazı - 30 dk kala"},
-                {"minutes": 15, "enabled": True, "sound": "default",
+                {"minutes": 15, "direction": "before", "enabled": True, "sound": "default",
                  "label": "Cuma Namazı - 15 dk kala"},
+                {"minutes": 30, "direction": "after", "enabled": False, "sound": "default",
+                 "label": "Cuma Namazı Sonrası - Mesaiye Dönüş (30 dk sonra)"},
             ],
         },
     }

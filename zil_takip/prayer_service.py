@@ -87,8 +87,12 @@ def get_cached_or_fetch(city: str, country: str = "Turkey",
         return cached, False
 
 
-def compute_offset_time(hhmm: str, minutes_before: int) -> str:
-    """'13:12' - 30 dk => '12:42' gibi hesaplama yapar."""
+def compute_relative_time(hhmm: str, minutes: int, direction: str = "before") -> str:
+    """Namaz vaktine göre 'önce' ya da 'sonra' bir saat hesaplar.
+    Örnek: '13:12', 30, 'before' => '12:42'
+           '13:12', 30, 'after'  => '13:42' (namazdan/molanın bitişinden sonra
+           mesaiye dönüş gibi kullanımlar için)"""
     base = datetime.strptime(hhmm, "%H:%M")
-    result = base - timedelta(minutes=minutes_before)
+    delta = timedelta(minutes=minutes)
+    result = base - delta if direction == "before" else base + delta
     return result.strftime("%H:%M")
