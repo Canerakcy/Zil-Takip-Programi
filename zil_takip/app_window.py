@@ -1,16 +1,27 @@
 """Ceselsan Zil Takip Programı - Ana pencere (Tkinter arayüzü)."""
 from __future__ import annotations
 
+import os
+import queue
+import subprocess
+import sys
 import tkinter as tk
 import uuid
 from datetime import datetime
 from tkinter import filedialog, messagebox, ttk
 from typing import Optional
 
+import app_logging
 import audio_player
+import autostart
 import prayer_service
 from config_store import load_config, save_config
 from scheduler import BellScheduler
+
+try:
+    import tray_icon
+except Exception:  # pystray/Pillow bulunamazsa tepsi özelliği sessizce devre dışı kalır
+    tray_icon = None
 
 APP_TITLE = "Ceselsan Zil Takip Programı"
 DAY_NAMES = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
@@ -37,6 +48,13 @@ def format_sound(sound: Optional[str]) -> str:
 
 def format_direction(direction: str) -> str:
     return "Önce" if direction != "after" else "Sonra"
+
+
+def format_holiday_date(iso_date: str) -> str:
+    try:
+        return datetime.strptime(iso_date, "%Y-%m-%d").strftime("%d.%m.%Y")
+    except ValueError:
+        return iso_date
 
 
 class EntryDialog(tk.Toplevel):
@@ -210,6 +228,47 @@ class OffsetDialog(tk.Toplevel):
         self.destroy()
 
 
+class HolidayDialog(tk.Toplevel):
+    """Tatil günü ekleme penceresi - bu tarihlerde hiçbir zil çalmaz."""
+
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.title("Tatil Günü Ekle")
+        self.configure(bg=BG)
+        self.resizable(False, False)
+        self.result: Optional[dict] = None
+        self.transient(parent)
+        self.grab_set()
+
+        self.date_var = tk.StringVar(value=datetime.now().strftime("%d.%m.%Y"))
+        self.label_var = tk.StringVar(value="")
+
+        pad = {"padx": 10, "pady": 6}
+        ttk.Label(self, text="Tarih (GG.AA.YYYY):").grid(row=0, column=0, sticky="w", **pad)
+        ttk.Entry(self, textvariable=self.date_var, width=14).grid(
+            row=0, column=1, sticky="w", **pad)
+
+        ttk.Label(self, text="Açıklama:").grid(row=1, column=0, sticky="w", **pad)
+        ttk.Entry(self, textvariable=self.label_var, width=32).grid(
+            row=1, column=1, sticky="we", **pad)
+
+        btn_frame = ttk.Frame(self)
+        btn_frame.grid(row=2, column=0, columnspan=2, pady=10)
+        ttk.Button(btn_frame, text="💾 Kaydet", style="Accent.TButton",
+                   command=self._on_save).pack(side="left", padx=6)
+        ttk.Button(btn_frame, text="İptal", command=self.destroy).pack(side="left", padx=6)
+
+    def _on_save(self) -> None:
+        date_str = self.date_var.get().strip()
+        try:
+            parsed = datetime.strptime(date_str, "%d.%m.%Y")
+        except ValueError:
+            messagebox.showerror(APP_TITLE, "Tarih GG.AA.YYYY formatında olmalıdır. Örnek: 23.04.2027")
+            return
+        self.result = {"date": parsed.strftime("%Y-%m-%d"), "label": self.label_var.get().strip()}
+        self.destroy()
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -221,12 +280,18 @@ class App(tk.Tk):
         self._setup_style()
 
         self.cfg = load_config()
+        self._file_logger = app_logging.get_logger()
+        self._tray: Optional["tray_icon.TrayIcon"] = None
 
         self._build_ui()
         self._refresh_entries_tree()
         self._refresh_offsets_tree()
         self._refresh_devices()
+        self._refresh_holidays_tree()
         self._update_clock()
+
+        if self.cfg.get("minimize_to_tray", True):
+            self._start_tray()
 
         self.scheduler = BellScheduler(get_config=lambda: self.cfg, on_log=self._log)
         self.scheduler.start()
@@ -288,13 +353,16 @@ class App(tk.Tk):
         self.entries_tab = ttk.Frame(notebook)
         self.friday_tab = ttk.Frame(notebook)
         self.audio_tab = ttk.Frame(notebook)
+        self.general_tab = ttk.Frame(notebook)
         notebook.add(self.entries_tab, text="🔔 Zil Programı")
         notebook.add(self.friday_tab, text="🕌 Cuma Namazı")
         notebook.add(self.audio_tab, text="🔊 Ses Ayarları")
+        notebook.add(self.general_tab, text="⚙️ Genel")
 
         self._build_entries_tab()
         self._build_friday_tab()
         self._build_audio_tab()
+        self._build_general_tab()
 
         log_frame = ttk.LabelFrame(self, text="📋 Kayıtlar")
         log_frame.pack(fill="both", expand=False, padx=10, pady=(0, 10))
@@ -442,8 +510,63 @@ class App(tk.Tk):
 
         frame.columnconfigure(1, weight=1)
 
+    def _build_general_tab(self) -> None:
+        frame = self.general_tab
+
+        self.tray_var = tk.BooleanVar(value=self.cfg.get("minimize_to_tray", True))
+        tray_check = ttk.Checkbutton(
+            frame, text="Pencereyi kapatınca sistem tepsisine küçült (programı tamamen kapatma)",
+            variable=self.tray_var, command=self._save_tray_setting)
+        tray_check.pack(anchor="w", padx=10, pady=(12, 4))
+        if tray_icon is None:
+            tray_check.state(["disabled"])
+            ttk.Label(frame, text="(Bu özellik için gerekli kütüphane bulunamadı)",
+                      foreground="#666666").pack(anchor="w", padx=30)
+
+        autostart_row = ttk.Frame(frame)
+        autostart_row.pack(anchor="w", padx=10, pady=4, fill="x")
+        self.autostart_var = tk.BooleanVar(
+            value=autostart.is_enabled() if autostart.is_supported()
+            else self.cfg.get("start_with_windows", False))
+        autostart_check = ttk.Checkbutton(
+            autostart_row, text="Windows açılışında otomatik başlat",
+            variable=self.autostart_var, command=self._save_autostart_setting)
+        autostart_check.pack(side="left")
+        if not autostart.is_supported():
+            autostart_check.state(["disabled"])
+            ttk.Label(autostart_row, text="(Sadece Windows'ta kullanılabilir)",
+                      foreground="#666666").pack(side="left", padx=8)
+
+        log_row = ttk.Frame(frame)
+        log_row.pack(anchor="w", padx=10, pady=(4, 12), fill="x")
+        ttk.Label(log_row, text="Zil kayıtları ayrıca dosyaya da yazılır.").pack(side="left")
+        ttk.Button(log_row, text="📁 Log Klasörünü Aç", command=self._open_log_folder).pack(
+            side="left", padx=8)
+
+        holidays_frame = ttk.LabelFrame(frame, text="Tatil Günleri (bu tarihlerde hiç zil çalmaz)")
+        holidays_frame.pack(fill="both", expand=True, padx=10, pady=8)
+
+        columns = ("date", "label")
+        self.holidays_tree = ttk.Treeview(holidays_frame, columns=columns, show="headings",
+                                           height=8)
+        self.holidays_tree.heading("date", text="Tarih")
+        self.holidays_tree.heading("label", text="Açıklama")
+        self.holidays_tree.column("date", width=110, anchor="w")
+        self.holidays_tree.column("label", width=420, anchor="w")
+        self.holidays_tree.tag_configure("oddrow", background=ROW_ODD)
+        self.holidays_tree.tag_configure("evenrow", background=ROW_EVEN)
+        self.holidays_tree.pack(fill="both", expand=True, padx=8, pady=8)
+
+        btn_frame = ttk.Frame(holidays_frame)
+        btn_frame.pack(fill="x", padx=8, pady=(0, 8))
+        ttk.Button(btn_frame, text="➕ Ekle", style="Accent.TButton",
+                   command=self._add_holiday).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="🗑️ Sil", command=self._delete_holiday).pack(side="left", padx=4)
+
     # ---------- Yardımcı: log ----------
     def _log(self, message: str) -> None:
+        self._file_logger.info(message)
+
         def append():
             timestamp = datetime.now().strftime("%H:%M:%S")
             if message.startswith("Zil çalıyor"):
@@ -639,7 +762,114 @@ class App(tk.Tk):
         except Exception as exc:
             messagebox.showerror(APP_TITLE, f"Ses çalınamadı: {exc}")
 
+    # ---------- Genel sekmesi: sistem tepsisi ----------
+    def _start_tray(self) -> None:
+        if tray_icon is None or self._tray is not None:
+            return
+        try:
+            self._tray = tray_icon.TrayIcon()
+            self._tray.start()
+            self.after(200, self._poll_tray_queue)
+        except Exception as exc:
+            self._log(f"Sistem tepsisi simgesi başlatılamadı: {exc}")
+            self._tray = None
+
+    def _stop_tray(self) -> None:
+        if self._tray is not None:
+            self._tray.stop()
+            self._tray = None
+
+    def _poll_tray_queue(self) -> None:
+        if self._tray is None:
+            return
+        try:
+            while True:
+                cmd = self._tray.commands.get_nowait()
+                if cmd == tray_icon.SHOW:
+                    self.deiconify()
+                    self.lift()
+                    self.focus_force()
+                elif cmd == tray_icon.QUIT:
+                    self._quit_app()
+                    return
+        except queue.Empty:
+            pass
+        self.after(200, self._poll_tray_queue)
+
+    def _save_tray_setting(self) -> None:
+        self.cfg["minimize_to_tray"] = self.tray_var.get()
+        self._persist()
+        if self.tray_var.get():
+            self._start_tray()
+        else:
+            self._stop_tray()
+
+    # ---------- Genel sekmesi: otomatik başlatma ----------
+    def _save_autostart_setting(self) -> None:
+        enabled = self.autostart_var.get()
+        try:
+            autostart.set_enabled(enabled)
+        except Exception as exc:
+            messagebox.showerror(APP_TITLE, f"Otomatik başlatma ayarlanamadı: {exc}")
+            self.autostart_var.set(not enabled)
+            return
+        self.cfg["start_with_windows"] = enabled
+        self._persist()
+
+    # ---------- Genel sekmesi: log klasörü ----------
+    def _open_log_folder(self) -> None:
+        log_dir = app_logging.get_log_dir()
+        try:
+            if sys.platform == "win32":
+                os.startfile(log_dir)  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.run(["open", str(log_dir)], check=False)
+            else:
+                subprocess.run(["xdg-open", str(log_dir)], check=False)
+        except Exception as exc:
+            messagebox.showinfo(APP_TITLE, f"Log klasörü: {log_dir}\n(Otomatik açılamadı: {exc})")
+
+    # ---------- Genel sekmesi: tatil günleri ----------
+    def _refresh_holidays_tree(self) -> None:
+        self.holidays_tree.delete(*self.holidays_tree.get_children())
+        holidays = sorted(self.cfg.get("holidays", []), key=lambda h: h.get("date", ""))
+        for i, holiday in enumerate(holidays):
+            tag = "evenrow" if i % 2 == 0 else "oddrow"
+            self.holidays_tree.insert("", "end", iid=holiday["date"], tags=(tag,), values=(
+                format_holiday_date(holiday.get("date", "")), holiday.get("label", "")))
+
+    def _add_holiday(self) -> None:
+        dialog = HolidayDialog(self)
+        self.wait_window(dialog)
+        if dialog.result:
+            self.cfg.setdefault("holidays", [])
+            self.cfg["holidays"] = [h for h in self.cfg["holidays"]
+                                     if h["date"] != dialog.result["date"]]
+            self.cfg["holidays"].append(dialog.result)
+            self._persist()
+            self._refresh_holidays_tree()
+
+    def _delete_holiday(self) -> None:
+        selection = self.holidays_tree.selection()
+        if not selection:
+            messagebox.showinfo(APP_TITLE, "Lütfen silmek için bir tarih seçin.")
+            return
+        if not messagebox.askyesno(APP_TITLE, "Seçili tatil günü silinsin mi?"):
+            return
+        date_iso = selection[0]
+        self.cfg["holidays"] = [h for h in self.cfg["holidays"] if h["date"] != date_iso]
+        self._persist()
+        self._refresh_holidays_tree()
+
     # ---------- Kapanış ----------
     def _on_close(self) -> None:
+        if self.cfg.get("minimize_to_tray", True) and self._tray is not None:
+            self.withdraw()
+            self._log("Pencere sistem tepsisine küçültüldü. Program arka planda çalışmaya devam ediyor.")
+        else:
+            self._quit_app()
+
+    def _quit_app(self) -> None:
         self.scheduler.stop()
+        self._stop_tray()
         self.destroy()

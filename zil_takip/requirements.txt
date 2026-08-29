@@ -2,5 +2,7 @@ numpy
 sounddevice
 soundfile
 requests
+pystray
+Pillow
 pyinstaller
 pyinstaller-hooks-contrib

@@ -26,6 +26,10 @@ farklı olduğu için tamamen size bağlı):
 
 ![Cuma Zil Zamanı](docs/screenshots/05_cuma_zil_zamani_penceresi.png)
 
+**Genel Ayarlar** (sistem tepsisi, Windows'ta otomatik başlatma, tatil günleri):
+
+![Genel Ayarlar](docs/screenshots/06_genel_ayarlar.png)
+
 ## Özellikler
 
 - **Haftalık zil programı**: İstediğiniz saatlerde, istediğiniz günlerde
@@ -46,6 +50,16 @@ farklı olduğu için tamamen size bağlı):
     kadar kayıt olarak eklenebilir.
 - **Kalıcı ayarlar**: Tüm ayarlar diske kaydedilir, bilgisayar
   kapatılıp açıldığında kaldığı yerden devam eder.
+- **Sistem tepsisine küçültme**: Pencereyi kapatma (X) butonuna
+  bastığınızda program tamamen kapanmaz, sistem tepsisine küçülür ve
+  arka planda zil çalmaya devam eder. Tamamen kapatmak için tepsi
+  simgesine sağ tıklayıp "Çıkış" seçilir.
+- **Windows açılışında otomatik başlatma**: Bilgisayar her açıldığında
+  programın kendiliğinden başlamasını sağlayabilirsiniz.
+- **Tatil günleri**: Belirlediğiniz tarihlerde (resmi/okul tatili vb.)
+  hiçbir zil çalmaz.
+- **Dosyaya log kaydı**: Tüm zil kayıtları, pencere kapansa bile
+  incelenebilmesi için ayrıca bir log dosyasına da yazılır.
 
 ## Klasör yapısı
 
@@ -57,6 +71,9 @@ zil_takip/
   audio_player.py      Hoparlör listeleme ve seçilen cihazdan ses çalma (sounddevice)
   prayer_service.py    Cuma namazı vaktini internetten çekme ve önbellekleme
   config_store.py      Ayarların diske (JSON) kaydedilmesi
+  tray_icon.py         Sistem tepsisi simgesi ve menüsü (pystray)
+  autostart.py         Windows açılışında otomatik başlatma (winreg)
+  app_logging.py       Zil kayıtlarının dosyaya yazılması
   requirements.txt     Python bağımlılıkları
   zil_takip.spec       PyInstaller paketleme yapılandırması
 docs/screenshots/      README'deki ekran görüntüleri
@@ -78,10 +95,14 @@ saklanır.
    ayarlıdır; bu süreleri değiştirebilir, silebilir veya "namazdan sonra"
    yönünde yenilerini ekleyebilirsiniz. "Cuma Vaktini Göster" butonuyla
    o haftaki vakti anında görebilirsiniz.
+5. **Genel** sekmesinden sistem tepsisine küçültmeyi, Windows'ta otomatik
+   başlatmayı açıp kapatabilir, tatil günü ekleyebilirsiniz.
 
 Program, ayarları her değişiklikte otomatik kaydeder ve arka planda
-sürekli çalışarak zamanı geldiğinde zili çalar. Pencereyi simge durumuna
-küçültmeniz sorun değil (kapatmadığınız sürece çalışmaya devam eder).
+sürekli çalışarak zamanı geldiğinde zili çalar. Pencereyi kapatma (X)
+butonuna basmanız sorun değil; varsayılan olarak program tamamen
+kapanmaz, sistem tepsisine küçülüp arka planda çalışmaya devam eder.
+Tamamen kapatmak isterseniz tepsi simgesine sağ tıklayıp "Çıkış"ı seçin.
 
 ## Windows .exe nasıl üretiliyor?
 

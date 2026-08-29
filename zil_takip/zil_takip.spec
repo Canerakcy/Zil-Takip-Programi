@@ -12,6 +12,10 @@ a = Analysis(
     hiddenimports=[
         'sounddevice',
         'soundfile',
+        'pystray',
+        'pystray._win32',
+        'PIL',
+        'PIL._tkinter_finder',
     ],
     hookspath=[],
     hooksconfig={},

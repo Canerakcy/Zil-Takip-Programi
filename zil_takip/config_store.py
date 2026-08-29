@@ -57,6 +57,10 @@ def default_config() -> dict[str, Any]:
                  "label": "Cuma Namazı Sonrası - Mesaiye Dönüş (30 dk sonra)"},
             ],
         },
+        "minimize_to_tray": True,
+        "start_with_windows": False,
+        # {"date": "YYYY-AA-GG", "label": "..."} formatında; bu tarihlerde hiç zil çalmaz
+        "holidays": [],
     }
 
 

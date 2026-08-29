@@ -4,7 +4,6 @@ tetikleyen thread."""
 from __future__ import annotations
 
 import threading
-import time
 from datetime import date, datetime
 from typing import Callable, Optional
 
@@ -24,6 +23,7 @@ class BellScheduler(threading.Thread):
         self._fired_date: Optional[date] = None
         self._friday_cache: dict[str, Optional[str]] = {}  # cache_key -> "HH:MM"
         self._friday_cache_date: Optional[date] = None
+        self._holiday_notice_shown = False
 
     def stop(self) -> None:
         self._stop_event.set()
@@ -40,12 +40,23 @@ class BellScheduler(threading.Thread):
         if self._fired_date != today:
             self._fired_date = today
             self._fired_today.clear()
+            self._holiday_notice_shown = False
 
     def _tick(self) -> None:
         cfg = self._get_config()
         now = datetime.now()
         today = now.date()
         self._reset_daily_state_if_needed(today)
+
+        holiday = next((h for h in cfg.get("holidays", [])
+                         if h.get("date") == today.isoformat()), None)
+        if holiday is not None:
+            if not self._holiday_notice_shown:
+                self._holiday_notice_shown = True
+                label = holiday.get("label") or "Tatil günü"
+                self._on_log(f"Bugün tatil ({label}) - ziller çalmayacak.")
+            return
+
         current_hhmm = now.strftime("%H:%M")
         weekday = now.weekday()  # Pazartesi=0 ... Pazar=6
 
