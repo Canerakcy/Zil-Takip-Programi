@@ -42,8 +42,9 @@ jobs:
           path: zil_takip/dist/CeselsanZilTakip.exe
           if-no-files-found: error
 
-      - name: GitHub Release oluştur (herkese açık indirme linki)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: GitHub Release oluştur/güncelle (herkese açık indirme linki)
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v1.0.0
+          name: "Ceselsan Zil Takip Programı v1.0.0"
           files: zil_takip/dist/CeselsanZilTakip.exe
