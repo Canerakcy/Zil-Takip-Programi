@@ -1,0 +1,39 @@
+name: Windows EXE Derle
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - "zil_takip/**"
+      - ".github/workflows/build-windows-exe.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: zil_takip
+    steps:
+      - name: Kodu al
+        uses: actions/checkout@v4
+
+      - name: Python kur
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Bağımlılıkları kur
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: EXE oluştur (PyInstaller)
+        run: pyinstaller zil_takip.spec --noconfirm --clean
+
+      - name: EXE'yi yükle (Actions Artifacts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CeselsanZilTakip-windows-exe
+          path: zil_takip/dist/CeselsanZilTakip.exe
+          if-no-files-found: error

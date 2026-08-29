@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+zil_takip/build/
+zil_takip/dist/
+*.spec.bak
+.venv/
+venv/
