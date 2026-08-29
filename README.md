@@ -9,7 +9,7 @@ yazılmıştır.
 Kuruluma gerek yok, GitHub hesabı da gerekmiyor — aşağıdaki linke
 tıklamanız yeterli:
 
-**👉 [CeselsanZilTakip.exe indir](https://github.com/Canerakcy/Zil-Takip-Program-/releases/latest/download/CeselsanZilTakip.exe)**
+**👉 [CeselsanZilTakip.exe indir](https://github.com/Canerakcy/Zil-Takip-Programi/releases/latest/download/CeselsanZilTakip.exe)**
 
 ## Ekran Görüntüleri
 
