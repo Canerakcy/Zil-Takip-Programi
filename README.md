@@ -56,22 +56,26 @@ farklı olduğu için tamamen size bağlı):
   .ogg/.flac dosyasını seçmeniz istenir.
 - **Namaz vakitleri (ayırt edici özellik)**: Seçtiğiniz il/ilçe için
   günlük namaz vakitlerini (İmsak, Güneş, Öğle, İkindi, Akşam, Yatsı)
-  internetten (Diyanet hesaplama yöntemiyle) otomatik çeker. Her vakit
-  için ayrı ayrı ayarlanabilir:
-  - **Sesli**: vakit girince (ya da "Dakika" + "Yön" ile belirlediğiniz
-    kadar önce/sonra - ör. namazdan 30 dk sonra mesaiye/derse dönüş zili
-    gibi, her kurumun mola süresi farklı olduğu için tamamen size bağlı)
-    seçtiğiniz ses dosyası çalınır.
-  - **Görsel**: ekranın sağ üst köşesinde kısa süreli bir bildirim
+  internetten (Diyanet hesaplama yöntemiyle) otomatik çeker. Her vakite
+  **istediğiniz kadar bağımsız bildirim/zil kaydı** eklenebilir (ör.
+  Öğle için hem "vaktinde ezan sesi" hem "Cuma günleri 30 dk sonra
+  mesaiye/derse dönüş zili" - ikisi ayrı ayrı, aynı anda aktif olabilir).
+  Her kayıt için ayrı ayrı ayarlanabilir:
+  - **Sesli / Görsel**: sesli açıksa seçtiğiniz ses dosyası çalınır;
+    görsel açıksa ekranın sağ üst köşesinde kısa süreli bir bildirim
     penceresi gösterilir. "Görsel Uyarıdan Sonra Sese/Ezana Devam Et"
-    açıksa, ses görsel kapatılana kadar beklenir (sıralı); kapalıysa
-    ikisi aynı anda başlar.
-  - **Sela**: "Cuma Günleri Sela Oku" işaretliyse, sadece Cuma günleri
-    öğle/Cuma vaktine göre (Dakika + Yön kadar önce/sonra) ayrı bir
-    ses/bildirim daha tetiklenir.
-  - **Kerahat vaktini hatırlat**: namaz kılmanın mekruh sayıldığı üç
-    zaman aralığında (güneş doğarken, istiva vaktinde, güneş batarken)
-    görsel bir hatırlatma gösterir (yaklaşık hesap, ses çalmaz).
+    genel ayarı açıksa, ses görsel kapatılana kadar beklenir (sıralı);
+    kapalıysa ikisi aynı anda başlar.
+  - **Dakika + Yön (Önce/Sonra)**: vaktin kaç dakika öncesinde ya da
+    sonrasında tetikleneceği - ör. namazdan 30 dk sonra mesaiye/derse
+    dönüş zili gibi, her kurumun mola süresi farklı olduğu için
+    tamamen size bağlı.
+  - **Sadece Cuma günleri çalışsın**: işaretlenirse kayıt yalnızca
+    Cuma günleri tetiklenir - Cuma namazı/Sela gibi kayıtlar için.
+  - **Kerahat vaktini hatırlat** (genel ayar): namaz kılmanın mekruh
+    sayıldığı üç zaman aralığında (güneş doğarken, istiva vaktinde,
+    güneş batarken) görsel bir hatırlatma gösterir (yaklaşık hesap,
+    ses çalmaz).
   - **Temkin süresi**: hesaplanan tüm vakitlere eklenen (negatif de
     olabilen) genel bir dakika payı.
   - **Pencereyi en üstte göster**: isterseniz ana pencere diğer
@@ -120,14 +124,16 @@ saklanır.
 3. **Ses Ayarları** sekmesinden zilin çalınacağı hoparlörü ve ses
    seviyesini seçin.
 4. **Namaz Vakitleri** sekmesinden ilinizi/ilçenizi girin, özelliği
-   etkinleştirin. Her vakit satırında Sesli/Görsel açıp kapatabilir, kendi
-   ses dosyanızı seçebilir, "Dakika" + "Yön" (Önce/Sonra) ile kaç dakika ne
-   yönde tetikleneceğini belirleyebilirsiniz (ör. namazdan 30 dk sonra
-   mesaiye dönüş zili). "Bugünün Vakitlerini Göster" butonuyla o günkü
-   vakitleri anında görebilirsiniz. Alttaki genel ayarlardan Cuma günleri
-   Sela okutabilir, kerahat vaktini hatırlatabilir, tüm vakitlere genel bir
-   dakika payı (temkin süresi) ekleyebilir ve "Şuan ki Ayarları Kaydet"
-   butonuyla değişiklikleri onaylayabilirsiniz.
+   etkinleştirin. "➕ Ekle" ile her vakite (İmsak..Yatsı) istediğiniz kadar
+   bağımsız bildirim/zil kaydı ekleyebilirsiniz - her kayıtta Sesli/Görsel,
+   kendi ses dosyanız, "Dakika" + "Yön" (Önce/Sonra) ve isterseniz "Sadece
+   Cuma günleri çalışsın" seçeneği bulunur (ör. Öğle için hem "vaktinde
+   ezan" hem "Cuma günleri 30 dk sonra mesaiye dönüş zili" ayrı ayrı
+   eklenebilir). "Bugünün Vakitlerini Göster" butonuyla o günkü vakitleri
+   anında görebilirsiniz. Alttaki genel ayarlardan kerahat vaktini
+   hatırlatabilir, tüm vakitlere genel bir dakika payı (temkin süresi)
+   ekleyebilir ve "Şuan ki Ayarları Kaydet" butonuyla değişiklikleri
+   onaylayabilirsiniz.
 5. **Genel** sekmesinden sistem tepsisine küçültmeyi, Windows'ta otomatik
    başlatmayı açıp kapatabilir, tatil günü ekleyebilirsiniz.
 

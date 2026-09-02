@@ -121,54 +121,39 @@ class BellScheduler(threading.Thread):
             return
 
         temkin = pt.get("temkin_suresi_dk", 0)
+        is_friday = weekday == 4
 
-        for vakit, setting in pt.get("vakitler", {}).items():
-            base_time = timings.get(vakit)
-            if not base_time or not (setting.get("sesli") or setting.get("gorsel")):
+        for alert in pt.get("alerts", []):
+            if not alert.get("enabled", True):
                 continue
-            minutes = setting.get("minutes_before", 0)
-            direction = setting.get("direction", "before")
+            if alert.get("friday_only") and not is_friday:
+                continue
+            vakit = alert.get("vakit", "ogle")
+            base_time = timings.get(vakit)
+            if not base_time or not (alert.get("sesli") or alert.get("gorsel")):
+                continue
+            minutes = alert.get("minutes", 0)
+            direction = alert.get("direction", "before")
             trigger_time = prayer_service.apply_offset_minutes(
                 base_time, temkin + _signed_offset(minutes, direction))
             if trigger_time != current_hhmm:
                 continue
-            fire_key = f"vakit:{vakit}:{today.isoformat()}"
+            fire_key = f"alert:{alert.get('id')}:{today.isoformat()}"
             if fire_key in self._fired_today:
                 continue
             self._fired_today.add(fire_key)
-            label = prayer_service.VAKIT_LABELS.get(vakit, vakit)
-            if minutes:
-                label += f" - {minutes} dk {'kala' if direction == 'before' else 'sonra'}"
-            self._fire_vakit(label, f"Vakit: {base_time}", setting, pt)
-
-        if pt.get("cuma_sela") and weekday == 4:  # Cuma
-            self._check_sela(pt, timings, today, current_hhmm)
+            label = alert.get("label") or self._default_alert_label(vakit, minutes, direction)
+            self._fire_vakit(label, f"Vakit: {base_time}", alert, pt)
 
         if pt.get("kerahat_hatirlat"):
             self._check_kerahat(timings, today, current_hhmm)
 
-    def _check_sela(self, pt: dict, timings: dict[str, str], today: date, current_hhmm: str) -> None:
-        sela = pt.get("sela", {})
-        ogle = timings.get("ogle")
-        if not ogle or not (sela.get("sesli") or sela.get("gorsel")):
-            return
-        temkin = pt.get("temkin_suresi_dk", 0)
-        minutes = sela.get("minutes_before", 0)
-        direction = sela.get("direction", "before")
-        trigger_time = prayer_service.apply_offset_minutes(
-            ogle, temkin + _signed_offset(minutes, direction))
-        if trigger_time != current_hhmm:
-            return
-        fire_key = f"sela:{today.isoformat()}"
-        if fire_key in self._fired_today:
-            return
-        self._fired_today.add(fire_key)
+    @staticmethod
+    def _default_alert_label(vakit: str, minutes: int, direction: str) -> str:
+        label = prayer_service.VAKIT_LABELS.get(vakit, vakit)
         if minutes:
-            yon_text = "kala" if direction == "before" else "sonra"
-            label = f"Sela - Cuma Namazına {minutes} dk {yon_text}"
-        else:
-            label = "Sela"
-        self._fire_vakit(label, f"Öğle/Cuma vakti: {ogle}", sela, pt)
+            label += f" - {minutes} dk {'kala' if direction == 'before' else 'sonra'}"
+        return label
 
     def _check_kerahat(self, timings: dict[str, str], today: date, current_hhmm: str) -> None:
         for label, start, _end in prayer_service.compute_kerahat_windows(timings):
