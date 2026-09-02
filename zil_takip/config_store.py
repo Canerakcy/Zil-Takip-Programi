@@ -29,6 +29,35 @@ def get_config_path() -> Path:
     return get_app_data_dir() / CONFIG_FILE_NAME
 
 
+VAKIT_KEYS = ["imsak", "gunes", "ogle", "ikindi", "aksam", "yatsi"]
+
+
+def default_vakit_setting() -> dict[str, Any]:
+    return {"sesli": False, "gorsel": False, "sound": None, "minutes_before": 0}
+
+
+def default_prayer_times() -> dict[str, Any]:
+    return {
+        "enabled": True,
+        "city": "İstanbul",
+        "country": "Turkey",
+        "vakitler": {vakit: default_vakit_setting() for vakit in VAKIT_KEYS},
+        # Sela, öğle vaktine göre (genelde Cuma günü) ayrı bir kayıt olarak okunur.
+        "sela": {"sesli": False, "gorsel": False, "sound": None, "minutes_before": 60},
+        # "Görsel Uyandan sonra Ezana Devam Et": açıksa önce görsel uyarı
+        # gösterilir, kapatılınca sesli ezan/zil çalınır (sıralı); kapalıysa
+        # ikisi aynı anda başlar.
+        "gorsel_sonrasi_sesli": False,
+        # "Cuma Günleri Sela Oku": sadece sela kaydını Cuma günleri tetikler.
+        "cuma_sela": False,
+        "kerahat_hatirlat": False,
+        # Temkin Süresi (dk): hesaplanan tüm vakitlere eklenen güvenlik payı,
+        # negatif de olabilir (örn. -5 => 5 dk erken).
+        "temkin_suresi_dk": 0,
+        "en_ustte_goster": False,
+    }
+
+
 def default_config() -> dict[str, Any]:
     return {
         "output_device": None,  # sounddevice cihaz adı (string) ya da None -> sistem varsayılanı
@@ -44,19 +73,7 @@ def default_config() -> dict[str, Any]:
                 "enabled": True,
             },
         ],
-        "friday_prayer": {
-            "enabled": True,
-            "city": "İstanbul",
-            "country": "Turkey",
-            "offsets": [
-                {"minutes": 30, "direction": "before", "enabled": True, "sound": "default",
-                 "label": "Cuma Namazı - 30 dk kala"},
-                {"minutes": 15, "direction": "before", "enabled": True, "sound": "default",
-                 "label": "Cuma Namazı - 15 dk kala"},
-                {"minutes": 30, "direction": "after", "enabled": False, "sound": "default",
-                 "label": "Cuma Namazı Sonrası - Mesaiye Dönüş (30 dk sonra)"},
-            ],
-        },
+        "prayer_times": default_prayer_times(),
         "minimize_to_tray": True,
         "start_with_windows": False,
         # {"date": "YYYY-AA-GG", "label": "..."} formatında; bu tarihlerde hiç zil çalmaz
@@ -78,14 +95,39 @@ def load_config() -> dict[str, Any]:
         save_config(cfg)
         return cfg
 
-    # Eksik alanları varsayılanlarla tamamla (ileriye dönük uyumluluk için)
+    # Eksik alanları varsayılanlarla tamamla (ileriye dönük uyumluluk için).
+    # "prayer_times" burada KASITLI olarak atlanır - aşağıdaki göç bloğu onu
+    # eski "friday_prayer" içindeki il/ilçe bilgisini koruyarak kendi kurar;
+    # burada genel setdefault ile doldurulursa (city="İstanbul" dahil) göç
+    # bloğundaki pt.setdefault("city", ...) hiçbir zaman devreye giremez.
     defaults = default_config()
     for key, value in defaults.items():
+        if key == "prayer_times":
+            continue
         cfg.setdefault(key, value)
-    cfg["friday_prayer"].setdefault("enabled", True)
-    cfg["friday_prayer"].setdefault("city", "İstanbul")
-    cfg["friday_prayer"].setdefault("country", "Turkey")
-    cfg["friday_prayer"].setdefault("offsets", defaults["friday_prayer"]["offsets"])
+
+    # Eski "friday_prayer" (sadece Cuma/öğle önce-sonra zili) yapısından,
+    # tüm günlük vakitleri kapsayan "prayer_times" yapısına geçiş: eski il/
+    # ilçe bilgisi korunur, geri kalanı yeni varsayılanlarla başlar - eski
+    # alan artık kullanılmadığından siline
+    old_friday = cfg.pop("friday_prayer", None)
+    # DİKKAT: setdefault'a default_prayer_times() (zaten city="İstanbul" dolu
+    # gelen) verilirse, aşağıdaki pt.setdefault("city", ...) hiçbir zaman
+    # devreye giremez - o yüzden burada bilerek BOŞ bir sözlükle başlanır,
+    # her alan kendi (eski veriyi koruyan) varsayılanıyla tek tek doldurulur.
+    pt = cfg.setdefault("prayer_times", {})
+    pt.setdefault("enabled", True)
+    pt.setdefault("city", (old_friday or {}).get("city", "İstanbul"))
+    pt.setdefault("country", (old_friday or {}).get("country", "Turkey"))
+    vakitler = pt.setdefault("vakitler", {})
+    for vakit in VAKIT_KEYS:
+        vakitler.setdefault(vakit, default_vakit_setting())
+    pt.setdefault("sela", default_prayer_times()["sela"])
+    pt.setdefault("gorsel_sonrasi_sesli", False)
+    pt.setdefault("cuma_sela", False)
+    pt.setdefault("kerahat_hatirlat", False)
+    pt.setdefault("temkin_suresi_dk", 0)
+    pt.setdefault("en_ustte_goster", False)
     return cfg
 
 

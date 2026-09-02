@@ -1,6 +1,6 @@
-"""Arka planda çalışan zamanlayıcı: düzenli zil saatlerini ve her Cuma için
-otomatik hesaplanan Cuma namazı öncesi zil vakitlerini takip edip
-tetikleyen thread."""
+"""Arka planda çalışan zamanlayıcı: düzenli zil saatlerini ve her gün
+otomatik hesaplanan namaz vakitlerini (+ sela, kerahat hatırlatması)
+takip edip tetikleyen thread."""
 from __future__ import annotations
 
 import threading
@@ -14,15 +14,19 @@ CHECK_INTERVAL_SECONDS = 5
 
 
 class BellScheduler(threading.Thread):
-    def __init__(self, get_config: Callable[[], dict], on_log: Callable[[str], None]):
+    def __init__(self, get_config: Callable[[], dict], on_log: Callable[[str], None],
+                 on_visual: Optional[Callable[[str, str, Optional[Callable[[], None]]], None]] = None):
         super().__init__(daemon=True)
         self._get_config = get_config
         self._on_log = on_log
+        # (baslik, altbaslik, on_dismiss) parametreleriyle cagrilir; ana
+        # pencere bunu kendi thread'inde bir Toplevel olarak gosterir.
+        self._on_visual = on_visual
         self._stop_event = threading.Event()
         self._fired_today: set[str] = set()
         self._fired_date: Optional[date] = None
-        self._friday_cache: dict[str, Optional[str]] = {}  # cache_key -> "HH:MM"
-        self._friday_cache_date: Optional[date] = None
+        self._timings_cache: dict[str, dict[str, str]] = {}  # cache_key -> {"imsak": "HH:MM", ...}
+        self._timings_cache_date: Optional[date] = None
         self._holiday_notice_shown = False
 
     def stop(self) -> None:
@@ -73,54 +77,121 @@ class BellScheduler(threading.Thread):
             self._fired_today.add(fire_key)
             self._ring(entry.get("label", "Zil"), entry.get("sound"), cfg)
 
-        if weekday == 4:  # Cuma
-            self._check_friday_prayer(cfg, today, current_hhmm)
+        self._check_prayer_times(cfg, today, current_hhmm, weekday)
 
-    def _check_friday_prayer(self, cfg: dict, today: date, current_hhmm: str) -> None:
-        fp = cfg.get("friday_prayer", {})
-        if not fp.get("enabled", False):
-            return
-
-        city = fp.get("city", "").strip()
-        country = fp.get("country", "Turkey").strip() or "Turkey"
+    # ---------- Namaz vakitleri ----------
+    def _get_today_timings(self, cfg: dict, today: date) -> Optional[dict[str, str]]:
+        pt = cfg.get("prayer_times", {})
+        city = pt.get("city", "").strip()
+        country = pt.get("country", "Turkey").strip() or "Turkey"
         if not city:
-            return
+            return None
 
         cache_key = f"{country}|{city}|{today.isoformat()}"
-        if self._friday_cache_date != today:
-            self._friday_cache.clear()
-            self._friday_cache_date = today
+        if self._timings_cache_date != today:
+            self._timings_cache.clear()
+            self._timings_cache_date = today
 
-        if cache_key not in self._friday_cache:
-            dhuhr_time, from_network = prayer_service.get_cached_or_fetch(
+        if cache_key not in self._timings_cache:
+            timings, from_network = prayer_service.get_cached_or_fetch_day(
                 city, country, target_date=today)
-            self._friday_cache[cache_key] = dhuhr_time
-            if dhuhr_time:
+            self._timings_cache[cache_key] = timings
+            if timings:
                 source = "internetten" if from_network else "önbellekten"
-                self._on_log(f"{city} için Cuma namazı vakti {source} alındı: {dhuhr_time}")
+                self._on_log(f"{city} için namaz vakitleri {source} alındı.")
             else:
                 self._on_log(
-                    f"{city} için Cuma namazı vakti alınamadı (internet bağlantısını kontrol edin).")
+                    f"{city} için namaz vakitleri alınamadı (internet bağlantısını kontrol edin).")
 
-        dhuhr_time = self._friday_cache.get(cache_key)
-        if not dhuhr_time:
+        return self._timings_cache.get(cache_key)
+
+    def _check_prayer_times(self, cfg: dict, today: date, current_hhmm: str, weekday: int) -> None:
+        pt = cfg.get("prayer_times", {})
+        if not pt.get("enabled", False):
             return
 
-        for offset in fp.get("offsets", []):
-            if not offset.get("enabled", True):
+        timings = self._get_today_timings(cfg, today)
+        if not timings:
+            return
+
+        temkin = pt.get("temkin_suresi_dk", 0)
+
+        for vakit, setting in pt.get("vakitler", {}).items():
+            base_time = timings.get(vakit)
+            if not base_time or not (setting.get("sesli") or setting.get("gorsel")):
                 continue
-            minutes = offset.get("minutes", 0)
-            direction = offset.get("direction", "before")
-            target_hhmm = prayer_service.compute_relative_time(dhuhr_time, minutes, direction)
-            if target_hhmm != current_hhmm:
+            minutes_before = setting.get("minutes_before", 0)
+            trigger_time = prayer_service.apply_offset_minutes(base_time, temkin - minutes_before)
+            if trigger_time != current_hhmm:
                 continue
-            fire_key = f"friday:{direction}:{minutes}:{today.isoformat()}"
+            fire_key = f"vakit:{vakit}:{today.isoformat()}"
             if fire_key in self._fired_today:
                 continue
             self._fired_today.add(fire_key)
-            direction_text = "kala" if direction == "before" else "sonra"
-            label = offset.get("label") or f"Cuma Namazı - {minutes} dk {direction_text}"
-            self._ring(label, offset.get("sound"), cfg)
+            label = prayer_service.VAKIT_LABELS.get(vakit, vakit)
+            if minutes_before:
+                label += f" - {minutes_before} dk kala"
+            self._fire_vakit(label, f"Vakit: {base_time}", setting, pt)
+
+        if pt.get("cuma_sela") and weekday == 4:  # Cuma
+            self._check_sela(pt, timings, today, current_hhmm)
+
+        if pt.get("kerahat_hatirlat"):
+            self._check_kerahat(timings, today, current_hhmm)
+
+    def _check_sela(self, pt: dict, timings: dict[str, str], today: date, current_hhmm: str) -> None:
+        sela = pt.get("sela", {})
+        ogle = timings.get("ogle")
+        if not ogle or not (sela.get("sesli") or sela.get("gorsel")):
+            return
+        temkin = pt.get("temkin_suresi_dk", 0)
+        minutes_before = sela.get("minutes_before", 0)
+        trigger_time = prayer_service.apply_offset_minutes(ogle, temkin - minutes_before)
+        if trigger_time != current_hhmm:
+            return
+        fire_key = f"sela:{today.isoformat()}"
+        if fire_key in self._fired_today:
+            return
+        self._fired_today.add(fire_key)
+        label = f"Sela - Cuma Namazına {minutes_before} dk kala" if minutes_before else "Sela"
+        self._fire_vakit(label, f"Öğle/Cuma vakti: {ogle}", sela, pt)
+
+    def _check_kerahat(self, timings: dict[str, str], today: date, current_hhmm: str) -> None:
+        for label, start, _end in prayer_service.compute_kerahat_windows(timings):
+            if start != current_hhmm:
+                continue
+            fire_key = f"kerahat:{label}:{today.isoformat()}"
+            if fire_key in self._fired_today:
+                continue
+            self._fired_today.add(fire_key)
+            self._on_log(f"Kerahat vakti başladı: {label}")
+            if self._on_visual:
+                self._on_visual(label, "Bu aralıkta namaz kılınması mekruh sayılır.", None)
+
+    def _fire_vakit(self, label: str, subtitle: str, setting: dict, pt: dict) -> None:
+        self._on_log(f"Vakit bildirimi: {label}")
+        sesli = setting.get("sesli")
+        gorsel = setting.get("gorsel")
+        sound = setting.get("sound")
+
+        def play_sound() -> None:
+            self._play_sound(label, sound)
+
+        if gorsel and self._on_visual:
+            sequential = sesli and pt.get("gorsel_sonrasi_sesli")
+            self._on_visual(label, subtitle, play_sound if sequential else None)
+            if sesli and not sequential:
+                play_sound()
+        elif sesli:
+            play_sound()
+
+    def _play_sound(self, label: str, sound: Optional[str]) -> None:
+        cfg = self._get_config()
+        try:
+            audio_player.play_file(sound, cfg.get("output_device"),
+                                    cfg.get("default_sound"), cfg.get("volume", 1.0))
+        except Exception as exc:
+            self._on_log(f"Ses çalınamadı ({label}): {exc}")
 
     def _ring(self, label: str, sound: Optional[str], cfg: dict) -> None:
         self._on_log(f"Zil çalıyor: {label}")
