@@ -33,7 +33,11 @@ VAKIT_KEYS = ["imsak", "gunes", "ogle", "ikindi", "aksam", "yatsi"]
 
 
 def default_vakit_setting() -> dict[str, Any]:
-    return {"sesli": False, "gorsel": False, "sound": None, "minutes_before": 0}
+    # direction: "before" (vakitten X dk önce) ya da "after" (vakitten X dk
+    # sonra, ör. mesaiye/derse dönüş zili) - kurumların mola süresi farklı
+    # olduğundan her iki yön de desteklenir.
+    return {"sesli": False, "gorsel": False, "sound": None,
+            "minutes_before": 0, "direction": "before"}
 
 
 def default_prayer_times() -> dict[str, Any]:
@@ -43,7 +47,8 @@ def default_prayer_times() -> dict[str, Any]:
         "country": "Turkey",
         "vakitler": {vakit: default_vakit_setting() for vakit in VAKIT_KEYS},
         # Sela, öğle vaktine göre (genelde Cuma günü) ayrı bir kayıt olarak okunur.
-        "sela": {"sesli": False, "gorsel": False, "sound": None, "minutes_before": 60},
+        "sela": {"sesli": False, "gorsel": False, "sound": None,
+                 "minutes_before": 60, "direction": "before"},
         # "Görsel Uyandan sonra Ezana Devam Et": açıksa önce görsel uyarı
         # gösterilir, kapatılınca sesli ezan/zil çalınır (sıralı); kapalıysa
         # ikisi aynı anda başlar.
@@ -121,8 +126,12 @@ def load_config() -> dict[str, Any]:
     pt.setdefault("country", (old_friday or {}).get("country", "Turkey"))
     vakitler = pt.setdefault("vakitler", {})
     for vakit in VAKIT_KEYS:
-        vakitler.setdefault(vakit, default_vakit_setting())
-    pt.setdefault("sela", default_prayer_times()["sela"])
+        setting = vakitler.setdefault(vakit, default_vakit_setting())
+        # "direction" alanı sonradan eklendi - önceki bir sürümle kaydedilmiş
+        # bir vakit ayarında eksik olabilir, tek tek tamamlanır.
+        setting.setdefault("direction", "before")
+    sela = pt.setdefault("sela", default_prayer_times()["sela"])
+    sela.setdefault("direction", "before")
     pt.setdefault("gorsel_sonrasi_sesli", False)
     pt.setdefault("cuma_sela", False)
     pt.setdefault("kerahat_hatirlat", False)

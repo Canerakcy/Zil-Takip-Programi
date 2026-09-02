@@ -58,15 +58,17 @@ farklı olduğu için tamamen size bağlı):
   günlük namaz vakitlerini (İmsak, Güneş, Öğle, İkindi, Akşam, Yatsı)
   internetten (Diyanet hesaplama yöntemiyle) otomatik çeker. Her vakit
   için ayrı ayrı ayarlanabilir:
-  - **Sesli**: vakit girince (ya da "Dk.Önce" kadar erken) seçtiğiniz
-    ses dosyası çalınır.
+  - **Sesli**: vakit girince (ya da "Dakika" + "Yön" ile belirlediğiniz
+    kadar önce/sonra - ör. namazdan 30 dk sonra mesaiye/derse dönüş zili
+    gibi, her kurumun mola süresi farklı olduğu için tamamen size bağlı)
+    seçtiğiniz ses dosyası çalınır.
   - **Görsel**: ekranın sağ üst köşesinde kısa süreli bir bildirim
     penceresi gösterilir. "Görsel Uyarıdan Sonra Sese/Ezana Devam Et"
     açıksa, ses görsel kapatılana kadar beklenir (sıralı); kapalıysa
     ikisi aynı anda başlar.
   - **Sela**: "Cuma Günleri Sela Oku" işaretliyse, sadece Cuma günleri
-    öğle/Cuma vaktine göre (Dk.Önce kadar erken) ayrı bir ses/bildirim
-    daha tetiklenir.
+    öğle/Cuma vaktine göre (Dakika + Yön kadar önce/sonra) ayrı bir
+    ses/bildirim daha tetiklenir.
   - **Kerahat vaktini hatırlat**: namaz kılmanın mekruh sayıldığı üç
     zaman aralığında (güneş doğarken, istiva vaktinde, güneş batarken)
     görsel bir hatırlatma gösterir (yaklaşık hesap, ses çalmaz).
@@ -119,8 +121,9 @@ saklanır.
    seviyesini seçin.
 4. **Namaz Vakitleri** sekmesinden ilinizi/ilçenizi girin, özelliği
    etkinleştirin. Her vakit satırında Sesli/Görsel açıp kapatabilir, kendi
-   ses dosyanızı seçebilir ve "Dk.Önce" ile kaç dakika erken tetikleneceğini
-   belirleyebilirsiniz. "Bugünün Vakitlerini Göster" butonuyla o günkü
+   ses dosyanızı seçebilir, "Dakika" + "Yön" (Önce/Sonra) ile kaç dakika ne
+   yönde tetikleneceğini belirleyebilirsiniz (ör. namazdan 30 dk sonra
+   mesaiye dönüş zili). "Bugünün Vakitlerini Göster" butonuyla o günkü
    vakitleri anında görebilirsiniz. Alttaki genel ayarlardan Cuma günleri
    Sela okutabilir, kerahat vaktini hatırlatabilir, tüm vakitlere genel bir
    dakika payı (temkin süresi) ekleyebilir ve "Şuan ki Ayarları Kaydet"

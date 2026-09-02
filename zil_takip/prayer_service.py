@@ -137,8 +137,8 @@ def compute_relative_time(hhmm: str, minutes: int, direction: str = "before") ->
 
 def apply_offset_minutes(hhmm: str, minutes: int) -> str:
     """Bir vakte, işaretli (pozitif/negatif) dakika ekler - Temkin Süresi ve
-    Dk.Önce alanları için kullanılır. Pozitif değer sonraya, negatif değer
-    öncesine kaydırır."""
+    vakit/Sela'nın Dakika+Yön alanları için kullanılır (bkz. scheduler.py >
+    _signed_offset). Pozitif değer sonraya, negatif değer öncesine kaydırır."""
     base = datetime.strptime(hhmm, "%H:%M")
     result = base + timedelta(minutes=minutes)
     return result.strftime("%H:%M")

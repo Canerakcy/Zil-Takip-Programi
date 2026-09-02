@@ -13,6 +13,12 @@ import prayer_service
 CHECK_INTERVAL_SECONDS = 5
 
 
+def _signed_offset(minutes: int, direction: str) -> int:
+    """'before' vaktin öncesine (negatif), 'after' vaktin sonrasına
+    (pozitif) kaydırır - ör. namazdan 30 dk sonra mesaiye dönüş zili."""
+    return minutes if direction == "after" else -minutes
+
+
 class BellScheduler(threading.Thread):
     def __init__(self, get_config: Callable[[], dict], on_log: Callable[[str], None],
                  on_visual: Optional[Callable[[str, str, Optional[Callable[[], None]]], None]] = None):
@@ -120,8 +126,10 @@ class BellScheduler(threading.Thread):
             base_time = timings.get(vakit)
             if not base_time or not (setting.get("sesli") or setting.get("gorsel")):
                 continue
-            minutes_before = setting.get("minutes_before", 0)
-            trigger_time = prayer_service.apply_offset_minutes(base_time, temkin - minutes_before)
+            minutes = setting.get("minutes_before", 0)
+            direction = setting.get("direction", "before")
+            trigger_time = prayer_service.apply_offset_minutes(
+                base_time, temkin + _signed_offset(minutes, direction))
             if trigger_time != current_hhmm:
                 continue
             fire_key = f"vakit:{vakit}:{today.isoformat()}"
@@ -129,8 +137,8 @@ class BellScheduler(threading.Thread):
                 continue
             self._fired_today.add(fire_key)
             label = prayer_service.VAKIT_LABELS.get(vakit, vakit)
-            if minutes_before:
-                label += f" - {minutes_before} dk kala"
+            if minutes:
+                label += f" - {minutes} dk {'kala' if direction == 'before' else 'sonra'}"
             self._fire_vakit(label, f"Vakit: {base_time}", setting, pt)
 
         if pt.get("cuma_sela") and weekday == 4:  # Cuma
@@ -145,15 +153,21 @@ class BellScheduler(threading.Thread):
         if not ogle or not (sela.get("sesli") or sela.get("gorsel")):
             return
         temkin = pt.get("temkin_suresi_dk", 0)
-        minutes_before = sela.get("minutes_before", 0)
-        trigger_time = prayer_service.apply_offset_minutes(ogle, temkin - minutes_before)
+        minutes = sela.get("minutes_before", 0)
+        direction = sela.get("direction", "before")
+        trigger_time = prayer_service.apply_offset_minutes(
+            ogle, temkin + _signed_offset(minutes, direction))
         if trigger_time != current_hhmm:
             return
         fire_key = f"sela:{today.isoformat()}"
         if fire_key in self._fired_today:
             return
         self._fired_today.add(fire_key)
-        label = f"Sela - Cuma Namazına {minutes_before} dk kala" if minutes_before else "Sela"
+        if minutes:
+            yon_text = "kala" if direction == "before" else "sonra"
+            label = f"Sela - Cuma Namazına {minutes} dk {yon_text}"
+        else:
+            label = "Sela"
         self._fire_vakit(label, f"Öğle/Cuma vakti: {ogle}", sela, pt)
 
     def _check_kerahat(self, timings: dict[str, str], today: date, current_hhmm: str) -> None:

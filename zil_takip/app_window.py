@@ -370,7 +370,7 @@ class App(tk.Tk):
         table_frame = ttk.LabelFrame(frame, text="Vakit Ayarları")
         table_frame.pack(fill="x", padx=8, pady=8)
 
-        headers = ["Vakit", "Sesli", "Görsel", "Ses Dosyası", "", "", "Dk.Önce"]
+        headers = ["Vakit", "Sesli", "Görsel", "Ses Dosyası", "", "", "Dakika", "Yön"]
         for col, text in enumerate(headers):
             if text:
                 ttk.Label(table_frame, text=text, font=FONT_BOLD).grid(
@@ -407,18 +407,26 @@ class App(tk.Tk):
             minutes_var = tk.IntVar(value=setting.get("minutes_before", 0))
             ttk.Spinbox(table_frame, from_=0, to=180, textvariable=minutes_var, width=6,
                         command=lambda v=vakit: self._save_vakit_setting(v)).grid(
-                row=i, column=6, padx=(10, 6), pady=3)
+                row=i, column=6, padx=(10, 2), pady=3)
+
+            direction_var = tk.StringVar(
+                value="Sonra" if setting.get("direction") == "after" else "Önce")
+            direction_combo = ttk.Combobox(table_frame, textvariable=direction_var, width=6,
+                                            state="readonly", values=["Önce", "Sonra"])
+            direction_combo.grid(row=i, column=7, padx=(2, 6), pady=3)
+            direction_combo.bind(
+                "<<ComboboxSelected>>", lambda e, v=vakit: self._save_vakit_setting(v))
 
             self.vakit_vars[vakit] = {
                 "sesli": sesli_var, "gorsel": gorsel_var,
-                "sound": sound_var, "minutes": minutes_var,
+                "sound": sound_var, "minutes": minutes_var, "direction": direction_var,
             }
 
         table_frame.columnconfigure(3, weight=1)
 
         ttk.Label(frame,
                   text="Not: 'Sela' satırı, sadece 'Cuma Günleri Sela Oku' işaretliyse ve Cuma "
-                       "günleri, öğle/Cuma vaktine göre (Dk.Önce kadar erken) çalışır. "
+                       "günleri, öğle/Cuma vaktine göre (Dakika + Yön kadar önce/sonra) çalışır. "
                        "Kıble yönü bu programın kapsamı dışındadır (zil/ses çalma amaçlı bir "
                        "araçtır, pusula değil).",
                   foreground="#666666", wraplength=820, justify="left").pack(
@@ -637,6 +645,7 @@ class App(tk.Tk):
             "gorsel": v["gorsel"].get(),
             "sound": v["sound"].get().strip() or None,
             "minutes_before": v["minutes"].get(),
+            "direction": "after" if v["direction"].get() == "Sonra" else "before",
         }
         if vakit == "sela":
             self.cfg["prayer_times"]["sela"] = setting
