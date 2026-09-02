@@ -32,6 +32,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Sürüm numarası oluştur
+        id: version
+        shell: bash
+        run: echo "tag=v1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Sürüm bilgisini exe'ye göm (version_info.txt)
+        shell: bash
+        run: |
+          sed -i "s/filevers=(1, 0, 0, 0)/filevers=(1, 0, ${{ github.run_number }}, 0)/" version_info.txt
+          sed -i "s/prodvers=(1, 0, 0, 0)/prodvers=(1, 0, ${{ github.run_number }}, 0)/" version_info.txt
+          sed -i "s/FileVersion', '1.0.0.0'/FileVersion', '1.0.${{ github.run_number }}.0'/" version_info.txt
+          sed -i "s/ProductVersion', '1.0.0.0'/ProductVersion', '1.0.${{ github.run_number }}.0'/" version_info.txt
+
       - name: EXE oluştur (PyInstaller)
         run: pyinstaller zil_takip.spec --noconfirm --clean
 
@@ -41,11 +54,6 @@ jobs:
           name: CeselsanZilTakip-windows-exe
           path: zil_takip/dist/CeselsanZilTakip.exe
           if-no-files-found: error
-
-      - name: Sürüm numarası oluştur
-        id: version
-        shell: bash
-        run: echo "tag=v1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
 
       - name: GitHub Release oluştur (her derleme yeni bir sürüm)
         uses: softprops/action-gh-release@v2

@@ -11,6 +11,20 @@ tıklamanız yeterli:
 
 **👉 [CeselsanZilTakip.exe indir](https://github.com/Canerakcy/Zil-Takip-Programi/releases/latest/download/CeselsanZilTakip.exe)**
 
+### ⚠️ "Windows bu uygulamayı tanımıyor" uyarısı çıkarsa
+
+Bu, **virüs ya da zararlı yazılım olduğu anlamına gelmez.** Windows
+SmartScreen, ücretli bir "kod imzalama sertifikası" ile imzalanmamış her
+küçük/bağımsız uygulama için bu uyarıyı gösterir - ücretsiz/açık kaynak
+projelerde çok yaygındır. Devam etmek için:
+
+1. Uyarı penceresinde **"Daha fazla bilgi"** (More info) yazısına tıklayın.
+2. Açılan **"Yine de çalıştır"** (Run anyway) butonuna basın.
+
+(Bu proje açık kaynaktır, kaynak kodun tamamı bu depoda - isterseniz
+`zil_takip/` klasöründeki kodu inceleyip kendiniz de derleyebilirsiniz;
+bkz. aşağıdaki "Kendi bilgisayarınızda elle derlemek" bölümü.)
+
 ## Ekran Görüntüleri
 
 | Zil Programı | Cuma Namazı |
@@ -152,3 +166,8 @@ pyinstaller zil_takip.spec --noconfirm --clean
   yaklaşık bir hatırlatma amaçlıdır.
 - Uygulamanın sürekli zil çalabilmesi için açık kalması gerekir
   (bilgisayar kapatılmamalı/uyku moduna alınmamalıdır).
+- .exe imzasızdır (ücretli bir kod imzalama sertifikası gerektirir), bu
+  yüzden ilk çalıştırmada Windows SmartScreen uyarısı çıkabilir - bkz.
+  yukarıdaki "İndir" bölümü. SmartScreen/antivirüs tarafından yanlışlıkla
+  şüpheli işaretlenme ihtimalini azaltmak için derleme UPX sıkıştırması
+  kullanmaz ve exe'ye gerçek yayıncı/sürüm bilgisi (Ceselsan) gömülür.
