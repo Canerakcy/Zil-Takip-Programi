@@ -56,28 +56,18 @@ farklı olduğu için tamamen size bağlı):
   .ogg/.flac dosyasını seçmeniz istenir.
 - **Namaz vakitleri (ayırt edici özellik)**: Seçtiğiniz il/ilçe için
   günlük namaz vakitlerini (İmsak, Güneş, Öğle, İkindi, Akşam, Yatsı)
-  internetten (Diyanet hesaplama yöntemiyle) otomatik çeker. Her vakite
-  **istediğiniz kadar bağımsız bildirim/zil kaydı** eklenebilir (ör.
-  Öğle için hem "vaktinde ezan sesi" hem "Cuma günleri 30 dk sonra
-  mesaiye/derse dönüş zili" - ikisi ayrı ayrı, aynı anda aktif olabilir).
-  Her kayıt için ayrı ayrı ayarlanabilir:
-  - **Sesli / Görsel**: sesli açıksa seçtiğiniz ses dosyası çalınır;
-    görsel açıksa ekranın sağ üst köşesinde kısa süreli bir bildirim
-    penceresi gösterilir. "Görsel Uyarıdan Sonra Sese/Ezana Devam Et"
-    genel ayarı açıksa, ses görsel kapatılana kadar beklenir (sıralı);
-    kapalıysa ikisi aynı anda başlar.
-  - **Dakika + Yön (Önce/Sonra)**: vaktin kaç dakika öncesinde ya da
-    sonrasında tetikleneceği - ör. namazdan 30 dk sonra mesaiye/derse
-    dönüş zili gibi, her kurumun mola süresi farklı olduğu için
-    tamamen size bağlı.
-  - **Sadece Cuma günleri çalışsın**: işaretlenirse kayıt yalnızca
-    Cuma günleri tetiklenir - Cuma namazı/Sela gibi kayıtlar için.
-  - **Kerahat vaktini hatırlat** (genel ayar): namaz kılmanın mekruh
-    sayıldığı üç zaman aralığında (güneş doğarken, istiva vaktinde,
-    güneş batarken) görsel bir hatırlatma gösterir (yaklaşık hesap,
-    ses çalmaz).
-  - **Temkin süresi**: hesaplanan tüm vakitlere eklenen (negatif de
-    olabilen) genel bir dakika payı.
+  internetten (Diyanet hesaplama yöntemiyle) otomatik çeker. İki ayrı
+  bölümden oluşur:
+  - **Günlük Vakit Sesi**: her vakit için tek bir basit ayar - açarsanız,
+    vakit girdiği anda seçtiğiniz ses dosyası tam vaktinde çalınır.
+    Dakika/yön gibi bir karmaşıklık yoktur; sadece aç/kapa + ses seçimi.
+  - **Cuma Namazı**: öğle/Cuma vaktine göre önce ve/veya sonra tetiklenen,
+    kendi bağımsız bölümü. İstediğiniz kadar kayıt ekleyebilirsiniz -
+    ör. namazdan 15 dk önce paydos zili **ve** namazdan 30 dk sonra
+    mesaiye/derse dönüş zili aynı anda, birbirinden bağımsız olarak
+    aktif olabilir. Her kayıt için dakika, yön (önce/sonra), etiket,
+    kendi ses dosyası ve etkin/pasif seçilebilir. Sadece Cuma günleri
+    çalışır, diğer günler hiç tetiklenmez.
   - **Pencereyi en üstte göster**: isterseniz ana pencere diğer
     programların önünde sabit kalır.
 - **Kalıcı ayarlar**: Tüm ayarlar diske kaydedilir, bilgisayar
@@ -101,8 +91,7 @@ zil_takip/
   app_window.py        Tkinter arayüzü (Zil Programı / Namaz Vakitleri / Ses Ayarları sekmeleri)
   scheduler.py         Arka planda zamanı takip edip zili/vakit bildirimini tetikleyen thread
   audio_player.py      Hoparlör listeleme ve seçilen cihazdan ses çalma (sounddevice)
-  prayer_service.py    Namaz vakitlerini internetten çekme, önbellekleme, kerahat hesaplama
-  visual_notifier.py   Vakit girdiğinde gösterilen görsel bildirim penceresi
+  prayer_service.py    Namaz vakitlerini internetten çekme ve önbellekleme
   config_store.py      Ayarların diske (JSON) kaydedilmesi
   tray_icon.py         Sistem tepsisi simgesi ve menüsü (pystray)
   autostart.py         Windows açılışında otomatik başlatma (winreg)
@@ -124,16 +113,14 @@ saklanır.
 3. **Ses Ayarları** sekmesinden zilin çalınacağı hoparlörü ve ses
    seviyesini seçin.
 4. **Namaz Vakitleri** sekmesinden ilinizi/ilçenizi girin, özelliği
-   etkinleştirin. "➕ Ekle" ile her vakite (İmsak..Yatsı) istediğiniz kadar
-   bağımsız bildirim/zil kaydı ekleyebilirsiniz - her kayıtta Sesli/Görsel,
-   kendi ses dosyanız, "Dakika" + "Yön" (Önce/Sonra) ve isterseniz "Sadece
-   Cuma günleri çalışsın" seçeneği bulunur (ör. Öğle için hem "vaktinde
-   ezan" hem "Cuma günleri 30 dk sonra mesaiye dönüş zili" ayrı ayrı
-   eklenebilir). "Bugünün Vakitlerini Göster" butonuyla o günkü vakitleri
-   anında görebilirsiniz. Alttaki genel ayarlardan kerahat vaktini
-   hatırlatabilir, tüm vakitlere genel bir dakika payı (temkin süresi)
-   ekleyebilir ve "Şuan ki Ayarları Kaydet" butonuyla değişiklikleri
-   onaylayabilirsiniz.
+   etkinleştirin. **Günlük Vakit Sesi** bölümünde her vakit için "Oku"
+   kutucuğunu işaretleyip bir ses dosyası seçerseniz, o vakit tam saatinde
+   çalar. **Cuma Namazı** bölümünde "➕ Ekle" ile öğle/Cuma vaktine göre
+   önce ve/veya sonra tetiklenen istediğiniz kadar bağımsız kayıt
+   ekleyebilirsiniz (ör. namazdan 15 dk önce paydos zili ve namazdan 30 dk
+   sonra mesaiye dönüş zili birlikte). "Bugünün Vakitlerini Göster"
+   butonuyla o günkü vakitleri anında görebilir, "Şuan ki Ayarları Kaydet"
+   butonuyla değişiklikleri onaylayabilirsiniz.
 5. **Genel** sekmesinden sistem tepsisine küçültmeyi, Windows'ta otomatik
    başlatmayı açıp kapatabilir, tatil günü ekleyebilirsiniz.
 
@@ -170,9 +157,6 @@ pyinstaller zil_takip.spec --noconfirm --clean
   halka açık bir servisten (Aladhan API, `method=13`) alınır; bu nedenle
   bilgisayarın internete bağlı olması gerekir. Vakitler bir kez
   alındıktan sonra o gün için önbelleğe alınır.
-- Kerahat vakti pencereleri (güneş doğarken/istiva/güneş batarken) sabit
-  dakika yaklaşıklarıyla hesaplanır - hassas astronomik hesap değildir,
-  yaklaşık bir hatırlatma amaçlıdır.
 - Uygulamanın sürekli zil çalabilmesi için açık kalması gerekir
   (bilgisayar kapatılmamalı/uyku moduna alınmamalıdır).
 - .exe imzasızdır (ücretli bir kod imzalama sertifikası gerektirir), bu

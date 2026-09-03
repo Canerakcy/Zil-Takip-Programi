@@ -15,7 +15,6 @@ import app_logging
 import audio_player
 import autostart
 import prayer_service
-import visual_notifier
 from config_store import VAKIT_KEYS, load_config, save_config
 from scheduler import BellScheduler
 
@@ -148,86 +147,58 @@ class EntryDialog(tk.Toplevel):
         self.destroy()
 
 
-class PrayerAlertDialog(tk.Toplevel):
-    """Bir namaz vaktine bağlı, bağımsız bir bildirim/zil kaydı ekleme ya da
-    düzenleme penceresi. Her vakite (İmsak..Yatsı) istediğiniz kadar
-    bağımsız kayıt eklenebilir - ör. Öğle için hem "30 dk önce uyarı" hem
-    "tam vaktinde ezan" hem "Cuma günleri 30 dk sonra mesaiye dönüş"."""
+class FridayOffsetDialog(tk.Toplevel):
+    """Cuma namazına göre (öncesi/sonrası) çalınacak zil ekleme/düzenleme
+    penceresi - ör. namazdan 15 dk önce paydos zili, namazdan 30 dk sonra
+    mesaiye dönüş zili. İstediğiniz kadar bağımsız kayıt eklenebilir."""
 
-    def __init__(self, parent, alert: Optional[dict] = None):
+    def __init__(self, parent, offset: Optional[dict] = None):
         super().__init__(parent)
-        self.title("Namaz Vakti Bildirimi")
+        self.title("Cuma Namazı Zil Zamanı")
         self.configure(bg=BG)
         self.resizable(False, False)
         self.result: Optional[dict] = None
         self.transient(parent)
         self.grab_set()
 
-        alert = alert or {}
-        self.existing_id = alert.get("id")
-
-        vakit_labels = [prayer_service.VAKIT_LABELS[k] for k in VAKIT_KEYS]
-        self.vakit_label_to_key = dict(zip(vakit_labels, VAKIT_KEYS))
-        current_vakit = alert.get("vakit", "ogle")
-        self.vakit_var = tk.StringVar(
-            value=prayer_service.VAKIT_LABELS.get(current_vakit, "Öğle"))
-
-        self.minutes_var = tk.IntVar(value=alert.get("minutes", 0))
-        self.direction_var = tk.StringVar(
-            value="after" if alert.get("direction") == "after" else "before")
-        self.friday_only_var = tk.BooleanVar(value=alert.get("friday_only", False))
-        self.label_var = tk.StringVar(value=alert.get("label", ""))
-        self.sesli_var = tk.BooleanVar(value=alert.get("sesli", True))
-        self.gorsel_var = tk.BooleanVar(value=alert.get("gorsel", False))
-        self.enabled_var = tk.BooleanVar(value=alert.get("enabled", True))
-        self.sound_var = tk.StringVar(value=alert.get("sound") or "")
+        offset = offset or {}
+        self.existing_id = offset.get("id")
+        self.minutes_var = tk.IntVar(value=offset.get("minutes", 15))
+        self.direction_var = tk.StringVar(value=offset.get("direction", "before"))
+        self.label_var = tk.StringVar(value=offset.get("label", ""))
+        self.enabled_var = tk.BooleanVar(value=offset.get("enabled", True))
+        self.sound_var = tk.StringVar(value=offset.get("sound") or "")
 
         pad = {"padx": 10, "pady": 6}
-        ttk.Label(self, text="Vakit:").grid(row=0, column=0, sticky="w", **pad)
-        ttk.Combobox(self, textvariable=self.vakit_var, state="readonly", width=14,
-                     values=vakit_labels).grid(row=0, column=1, sticky="w", **pad)
-
-        ttk.Label(self, text="Kaç dakika:").grid(row=1, column=0, sticky="w", **pad)
-        ttk.Spinbox(self, from_=0, to=180, textvariable=self.minutes_var, width=8).grid(
-            row=1, column=1, sticky="w", **pad)
+        ttk.Label(self, text="Kaç dakika:").grid(row=0, column=0, sticky="w", **pad)
+        ttk.Spinbox(self, from_=1, to=180, textvariable=self.minutes_var, width=8).grid(
+            row=0, column=1, sticky="w", **pad)
 
         direction_frame = ttk.Frame(self)
-        direction_frame.grid(row=2, column=0, columnspan=3, sticky="w", padx=10, pady=(0, 6))
-        ttk.Radiobutton(direction_frame, text="Vakitten Önce",
+        direction_frame.grid(row=1, column=0, columnspan=3, sticky="w", padx=10, pady=(0, 6))
+        ttk.Radiobutton(direction_frame, text="Namazdan Önce (paydos/uyarı zili)",
                          variable=self.direction_var, value="before").pack(
             side="left", padx=(0, 16))
-        ttk.Radiobutton(direction_frame, text="Vakitten Sonra",
+        ttk.Radiobutton(direction_frame, text="Namazdan Sonra (ör. mesaiye dönüş)",
                          variable=self.direction_var, value="after").pack(side="left")
 
-        ttk.Checkbutton(self, text="Sadece Cuma günleri çalışsın (ör. Cuma namazı / Sela)",
-                         variable=self.friday_only_var).grid(
-            row=3, column=0, columnspan=3, sticky="w", padx=10, pady=(0, 6))
-
-        ttk.Label(self, text="Etiket:").grid(row=4, column=0, sticky="w", **pad)
+        ttk.Label(self, text="Etiket:").grid(row=2, column=0, sticky="w", **pad)
         ttk.Entry(self, textvariable=self.label_var, width=36).grid(
-            row=4, column=1, columnspan=2, sticky="we", **pad)
-        ttk.Label(self, text="Boş bırakılırsa vakit adı + dakika/yöne göre otomatik oluşturulur.",
-                  foreground="#666666").grid(row=5, column=0, columnspan=3, sticky="w", padx=10)
+            row=2, column=1, columnspan=2, sticky="we", **pad)
 
-        toggles_frame = ttk.Frame(self)
-        toggles_frame.grid(row=6, column=0, columnspan=3, sticky="w", padx=10, pady=(10, 0))
-        ttk.Checkbutton(toggles_frame, text="Sesli", variable=self.sesli_var).pack(
-            side="left", padx=(0, 16))
-        ttk.Checkbutton(toggles_frame, text="Görsel", variable=self.gorsel_var).pack(side="left")
-
-        ttk.Label(self, text="Ses dosyası:").grid(row=7, column=0, sticky="w", **pad)
+        ttk.Label(self, text="Ses dosyası:").grid(row=3, column=0, sticky="w", **pad)
         ttk.Entry(self, textvariable=self.sound_var, width=28).grid(
-            row=7, column=1, sticky="we", **pad)
+            row=3, column=1, sticky="we", **pad)
         ttk.Button(self, text="📁 Seç...", command=self._choose_sound).grid(
-            row=7, column=2, sticky="w", **pad)
+            row=3, column=2, sticky="w", **pad)
         ttk.Label(self, text="Boş bırakılırsa Ses Ayarları'ndaki varsayılan ses çalınır.",
-                  foreground="#666666").grid(row=8, column=0, columnspan=3, sticky="w", padx=10)
+                  foreground="#666666").grid(row=4, column=0, columnspan=3, sticky="w", padx=10)
 
         ttk.Checkbutton(self, text="Etkin", variable=self.enabled_var).grid(
-            row=9, column=0, columnspan=2, sticky="w", **pad)
+            row=5, column=0, columnspan=2, sticky="w", **pad)
 
         btn_frame = ttk.Frame(self)
-        btn_frame.grid(row=10, column=0, columnspan=3, pady=10)
+        btn_frame.grid(row=6, column=0, columnspan=3, pady=10)
         ttk.Button(btn_frame, text="💾 Kaydet", style="Accent.TButton",
                    command=self._on_save).pack(side="left", padx=6)
         ttk.Button(btn_frame, text="İptal", command=self.destroy).pack(side="left", padx=6)
@@ -240,28 +211,17 @@ class PrayerAlertDialog(tk.Toplevel):
             self.sound_var.set(path)
 
     def _on_save(self) -> None:
-        if not self.sesli_var.get() and not self.gorsel_var.get():
-            messagebox.showerror(APP_TITLE, "Sesli ya da Görsel'den en az birini işaretlemelisiniz.")
-            return
-        vakit_key = self.vakit_label_to_key.get(self.vakit_var.get(), "ogle")
         minutes = self.minutes_var.get()
         direction = self.direction_var.get()
-        label = self.label_var.get().strip()
-        if not label:
-            vakit_label = prayer_service.VAKIT_LABELS[vakit_key]
-            yon_text = "kala" if direction == "before" else "sonra"
-            label = f"{vakit_label} - {minutes} dk {yon_text}" if minutes else vakit_label
+        direction_text = "dk kala" if direction == "before" else "dk sonra"
+        label = self.label_var.get().strip() or f"Cuma Namazı - {minutes} {direction_text}"
         self.result = {
             "id": self.existing_id or str(uuid.uuid4()),
-            "vakit": vakit_key,
-            "label": label,
             "minutes": minutes,
             "direction": direction,
-            "friday_only": self.friday_only_var.get(),
-            "sesli": self.sesli_var.get(),
-            "gorsel": self.gorsel_var.get(),
-            "sound": self.sound_var.get().strip() or None,
+            "label": label,
             "enabled": self.enabled_var.get(),
+            "sound": self.sound_var.get().strip() or None,
         }
         self.destroy()
 
@@ -323,7 +283,7 @@ class App(tk.Tk):
 
         self._build_ui()
         self._refresh_entries_tree()
-        self._refresh_alerts_tree()
+        self._refresh_friday_tree()
         self._refresh_devices()
         self._refresh_holidays_tree()
         self._update_clock()
@@ -334,8 +294,7 @@ class App(tk.Tk):
         if self.cfg.get("minimize_to_tray", True):
             self._start_tray()
 
-        self.scheduler = BellScheduler(get_config=lambda: self.cfg, on_log=self._log,
-                                        on_visual=self._show_visual_notice)
+        self.scheduler = BellScheduler(get_config=lambda: self.cfg, on_log=self._log)
         self.scheduler.start()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
@@ -486,39 +445,71 @@ class App(tk.Tk):
         ttk.Label(top, textvariable=self.prayer_info_var, foreground=ACCENT_DARK,
                   wraplength=820, justify="left").pack(anchor="w", pady=(4, 0))
 
-        alerts_frame = ttk.LabelFrame(frame, text="Vakit Bildirimleri")
-        alerts_frame.pack(fill="both", expand=True, padx=8, pady=8)
+        daily_frame = ttk.LabelFrame(frame, text="Günlük Vakit Sesi")
+        daily_frame.pack(fill="x", padx=8, pady=8)
 
-        ttk.Label(alerts_frame,
-                  text="Her vakite istediğiniz kadar bağımsız kayıt ekleyebilirsiniz - ör. "
-                       "Öğle için hem 'vaktinde ezan' hem 'Cuma günleri 30 dk sonra mesaiye "
-                       "dönüş zili' ayrı ayrı, aynı anda aktif olabilir.",
+        ttk.Label(daily_frame,
+                  text="Açtığınız vakit, tam saatinde seçtiğiniz sesi çalar.",
+                  foreground="#666666", wraplength=820, justify="left").grid(
+            row=0, column=0, columnspan=4, sticky="w", padx=8, pady=(6, 6))
+
+        self.daily_vars: dict[str, dict] = {}
+        for i, vakit in enumerate(VAKIT_KEYS, start=1):
+            setting = pt["daily"][vakit]
+
+            ttk.Label(daily_frame, text=prayer_service.VAKIT_LABELS[vakit], width=8).grid(
+                row=i, column=0, padx=(8, 6), pady=3, sticky="w")
+
+            enabled_var = tk.BooleanVar(value=setting.get("enabled", False))
+            ttk.Checkbutton(daily_frame, text="Oku", variable=enabled_var,
+                             command=lambda v=vakit: self._save_daily_setting(v)).grid(
+                row=i, column=1, padx=6, pady=3, sticky="w")
+
+            sound_var = tk.StringVar(value=setting.get("sound") or "")
+            ttk.Entry(daily_frame, textvariable=sound_var, width=34, state="readonly").grid(
+                row=i, column=2, padx=(6, 2), pady=3, sticky="we")
+            ttk.Button(daily_frame, text="📁 Seç", width=7,
+                       command=lambda v=vakit: self._choose_daily_sound(v)).grid(
+                row=i, column=3, padx=2, pady=3)
+            ttk.Button(daily_frame, text="▶ Test", width=6,
+                       command=lambda v=vakit: self._test_daily_sound(v)).grid(
+                row=i, column=4, padx=(2, 8), pady=3)
+
+            self.daily_vars[vakit] = {"enabled": enabled_var, "sound": sound_var}
+
+        daily_frame.columnconfigure(2, weight=1)
+
+        friday_frame = ttk.LabelFrame(frame, text="Cuma Namazı (öğle vaktine göre önce/sonra)")
+        friday_frame.pack(fill="both", expand=True, padx=8, pady=8)
+
+        ttk.Label(friday_frame,
+                  text="Sadece Cuma günleri çalışır. Örn: namazdan 15 dk önce paydos zili, "
+                       "namazdan 30 dk sonra mesaiye dönüş zili gibi istediğiniz kadar "
+                       "bağımsız kayıt ekleyebilirsiniz.",
                   foreground="#666666", wraplength=820, justify="left").pack(
             anchor="w", padx=8, pady=(6, 0))
 
-        columns = ("enabled", "vakit", "friday", "direction", "minutes", "sesli", "gorsel",
-                   "label")
-        self.alerts_tree = ttk.Treeview(alerts_frame, columns=columns, show="headings", height=7)
-        headers = {"enabled": "Etkin", "vakit": "Vakit", "friday": "Cuma mı",
-                   "direction": "Yön", "minutes": "Dakika", "sesli": "Sesli",
-                   "gorsel": "Görsel", "label": "Etiket"}
-        widths = {"enabled": 55, "vakit": 70, "friday": 65, "direction": 70,
-                  "minutes": 65, "sesli": 55, "gorsel": 60, "label": 260}
+        columns = ("enabled", "direction", "minutes", "label", "sound")
+        self.friday_tree = ttk.Treeview(friday_frame, columns=columns, show="headings", height=6)
+        headers = {"enabled": "Etkin", "direction": "Yön", "minutes": "Dakika",
+                   "label": "Etiket", "sound": "Ses"}
+        widths = {"enabled": 60, "direction": 70, "minutes": 70, "label": 300, "sound": 200}
         for col in columns:
-            self.alerts_tree.heading(col, text=headers[col])
-            self.alerts_tree.column(col, width=widths[col], anchor="w")
-        self.alerts_tree.tag_configure("oddrow", background=ROW_ODD)
-        self.alerts_tree.tag_configure("evenrow", background=ROW_EVEN)
-        self.alerts_tree.pack(fill="both", expand=True, padx=8, pady=8)
+            self.friday_tree.heading(col, text=headers[col])
+            self.friday_tree.column(col, width=widths[col], anchor="w")
+        self.friday_tree.tag_configure("oddrow", background=ROW_ODD)
+        self.friday_tree.tag_configure("evenrow", background=ROW_EVEN)
+        self.friday_tree.pack(fill="both", expand=True, padx=8, pady=8)
 
-        btn_frame = ttk.Frame(alerts_frame)
+        btn_frame = ttk.Frame(friday_frame)
         btn_frame.pack(fill="x", padx=8, pady=(0, 8))
         ttk.Button(btn_frame, text="➕ Ekle", style="Accent.TButton",
-                   command=self._add_alert).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="✏️ Düzenle", command=self._edit_alert).pack(
+                   command=self._add_friday_offset).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="✏️ Düzenle", command=self._edit_friday_offset).pack(
             side="left", padx=4)
-        ttk.Button(btn_frame, text="🗑️ Sil", command=self._delete_alert).pack(side="left", padx=4)
-        ttk.Button(btn_frame, text="▶ Şimdi Çal (Test)", command=self._test_alert).pack(
+        ttk.Button(btn_frame, text="🗑️ Sil", command=self._delete_friday_offset).pack(
+            side="left", padx=4)
+        ttk.Button(btn_frame, text="▶ Şimdi Çal (Test)", command=self._test_friday_offset).pack(
             side="left", padx=4)
 
         ttk.Label(frame,
@@ -530,34 +521,15 @@ class App(tk.Tk):
         options_frame = ttk.LabelFrame(frame, text="Genel Ayarlar")
         options_frame.pack(fill="x", padx=8, pady=8)
 
-        self.gorsel_sonrasi_var = tk.BooleanVar(value=pt.get("gorsel_sonrasi_sesli", False))
-        ttk.Checkbutton(options_frame, text="Görsel Uyarıdan Sonra Sese/Ezana Devam Et",
-                         variable=self.gorsel_sonrasi_var,
-                         command=self._save_prayer_general_settings).grid(
-            row=0, column=0, columnspan=2, sticky="w", padx=8, pady=4)
-
-        self.kerahat_var = tk.BooleanVar(value=pt.get("kerahat_hatirlat", False))
-        ttk.Checkbutton(options_frame, text="Kerahat Vaktini Hatırlat",
-                         variable=self.kerahat_var,
-                         command=self._save_prayer_general_settings).grid(
-            row=1, column=0, columnspan=2, sticky="w", padx=8, pady=4)
-
         self.prayer_topmost_var = tk.BooleanVar(value=pt.get("en_ustte_goster", False))
         ttk.Checkbutton(options_frame, text="Pencereyi En Üstte Göster",
                          variable=self.prayer_topmost_var,
                          command=self._save_prayer_general_settings).grid(
-            row=2, column=0, columnspan=2, sticky="w", padx=8, pady=4)
-
-        ttk.Label(options_frame, text="Temkin Süresi (dk):").grid(
-            row=3, column=0, sticky="w", padx=8, pady=4)
-        self.temkin_var = tk.IntVar(value=pt.get("temkin_suresi_dk", 0))
-        ttk.Spinbox(options_frame, from_=-30, to=30, textvariable=self.temkin_var, width=6,
-                    command=self._save_prayer_general_settings).grid(
-            row=3, column=1, sticky="w", padx=8, pady=4)
+            row=0, column=0, columnspan=2, sticky="w", padx=8, pady=4)
 
         ttk.Button(options_frame, text="💾 Şuan ki Ayarları Kaydet", style="Accent.TButton",
                    command=self._manual_save_prayer_settings).grid(
-            row=4, column=0, columnspan=2, sticky="w", padx=8, pady=(10, 6))
+            row=1, column=0, columnspan=2, sticky="w", padx=8, pady=(10, 6))
 
     def _build_audio_tab(self) -> None:
         frame = self.audio_tab
@@ -727,76 +699,93 @@ class App(tk.Tk):
         self._play_test_sound(sound)
 
     # ---------- Namaz vakitleri sekmesi ----------
-    def _refresh_alerts_tree(self) -> None:
-        self.alerts_tree.delete(*self.alerts_tree.get_children())
-        for i, alert in enumerate(self.cfg["prayer_times"]["alerts"]):
+    def _save_daily_setting(self, vakit: str) -> None:
+        pair = self.daily_vars[vakit]
+        self.cfg["prayer_times"]["daily"][vakit] = {
+            "enabled": pair["enabled"].get(),
+            "sound": pair["sound"].get().strip() or None,
+        }
+        self._persist()
+
+    def _choose_daily_sound(self, vakit: str) -> None:
+        path = filedialog.askopenfilename(
+            title="Ses dosyası seç",
+            filetypes=[("Ses dosyaları", "*.wav *.mp3 *.ogg *.flac"), ("Tüm dosyalar", "*.*")])
+        if not path:
+            return
+        self.daily_vars[vakit]["sound"].set(path)
+        self._save_daily_setting(vakit)
+
+    def _test_daily_sound(self, vakit: str) -> None:
+        sound = self.daily_vars[vakit]["sound"].get().strip() or "default"
+        self._play_test_sound(sound)
+
+    def _refresh_friday_tree(self) -> None:
+        self.friday_tree.delete(*self.friday_tree.get_children())
+        for i, offset in enumerate(self.cfg["prayer_times"]["friday_offsets"]):
             tag = "evenrow" if i % 2 == 0 else "oddrow"
-            self.alerts_tree.insert("", "end", iid=alert["id"], tags=(tag,), values=(
-                "Evet" if alert.get("enabled", True) else "Hayır",
-                prayer_service.VAKIT_LABELS.get(alert.get("vakit", "ogle"), "?"),
-                "Evet" if alert.get("friday_only") else "-",
-                "Önce" if alert.get("direction", "before") == "before" else "Sonra",
-                alert.get("minutes", 0),
-                "Evet" if alert.get("sesli") else "-",
-                "Evet" if alert.get("gorsel") else "-",
-                alert.get("label", ""),
+            self.friday_tree.insert("", "end", iid=offset["id"], tags=(tag,), values=(
+                "Evet" if offset.get("enabled", True) else "Hayır",
+                "Önce" if offset.get("direction", "before") == "before" else "Sonra",
+                offset.get("minutes", 0),
+                offset.get("label", ""),
+                format_sound(offset.get("sound")),
             ))
 
-    def _selected_alert_id(self) -> Optional[str]:
-        selection = self.alerts_tree.selection()
+    def _selected_friday_offset_id(self) -> Optional[str]:
+        selection = self.friday_tree.selection()
         return selection[0] if selection else None
 
-    def _add_alert(self) -> None:
-        dialog = PrayerAlertDialog(self)
+    def _add_friday_offset(self) -> None:
+        dialog = FridayOffsetDialog(self)
         self.wait_window(dialog)
         if dialog.result:
-            self.cfg["prayer_times"]["alerts"].append(dialog.result)
+            self.cfg["prayer_times"]["friday_offsets"].append(dialog.result)
             self._persist()
-            self._refresh_alerts_tree()
+            self._refresh_friday_tree()
 
-    def _edit_alert(self) -> None:
-        alert_id = self._selected_alert_id()
-        if not alert_id:
+    def _edit_friday_offset(self) -> None:
+        offset_id = self._selected_friday_offset_id()
+        if not offset_id:
             messagebox.showinfo(APP_TITLE, "Lütfen düzenlemek için bir kayıt seçin.")
             return
-        alert = next((a for a in self.cfg["prayer_times"]["alerts"] if a["id"] == alert_id), None)
-        if not alert:
+        offset = next((o for o in self.cfg["prayer_times"]["friday_offsets"]
+                       if o["id"] == offset_id), None)
+        if not offset:
             return
-        dialog = PrayerAlertDialog(self, alert)
+        dialog = FridayOffsetDialog(self, offset)
         self.wait_window(dialog)
         if dialog.result:
-            idx = self.cfg["prayer_times"]["alerts"].index(alert)
-            self.cfg["prayer_times"]["alerts"][idx] = dialog.result
+            idx = self.cfg["prayer_times"]["friday_offsets"].index(offset)
+            self.cfg["prayer_times"]["friday_offsets"][idx] = dialog.result
             self._persist()
-            self._refresh_alerts_tree()
+            self._refresh_friday_tree()
 
-    def _delete_alert(self) -> None:
-        alert_id = self._selected_alert_id()
-        if not alert_id:
+    def _delete_friday_offset(self) -> None:
+        offset_id = self._selected_friday_offset_id()
+        if not offset_id:
             messagebox.showinfo(APP_TITLE, "Lütfen silmek için bir kayıt seçin.")
             return
         if not messagebox.askyesno(APP_TITLE, "Seçili kayıt silinsin mi?"):
             return
-        self.cfg["prayer_times"]["alerts"] = [
-            a for a in self.cfg["prayer_times"]["alerts"] if a["id"] != alert_id]
+        self.cfg["prayer_times"]["friday_offsets"] = [
+            o for o in self.cfg["prayer_times"]["friday_offsets"] if o["id"] != offset_id]
         self._persist()
-        self._refresh_alerts_tree()
+        self._refresh_friday_tree()
 
-    def _test_alert(self) -> None:
-        alert_id = self._selected_alert_id()
-        alert = next((a for a in self.cfg["prayer_times"]["alerts"] if a["id"] == alert_id), None)
-        if not alert:
+    def _test_friday_offset(self) -> None:
+        offset_id = self._selected_friday_offset_id()
+        offset = next((o for o in self.cfg["prayer_times"]["friday_offsets"]
+                       if o["id"] == offset_id), None)
+        if not offset:
             messagebox.showinfo(APP_TITLE, "Lütfen test etmek için bir kayıt seçin.")
             return
-        self._play_test_sound(alert.get("sound") or "default")
+        self._play_test_sound(offset.get("sound") or "default")
 
     def _save_prayer_general_settings(self) -> None:
         pt = self.cfg["prayer_times"]
         pt["enabled"] = self.prayer_enabled_var.get()
         pt["city"] = self.prayer_city_var.get().strip()
-        pt["gorsel_sonrasi_sesli"] = self.gorsel_sonrasi_var.get()
-        pt["kerahat_hatirlat"] = self.kerahat_var.get()
-        pt["temkin_suresi_dk"] = self.temkin_var.get()
         pt["en_ustte_goster"] = self.prayer_topmost_var.get()
         self.attributes("-topmost", pt["en_ustte_goster"])
         self._persist()
@@ -820,17 +809,6 @@ class App(tk.Tk):
         parts = [f"{prayer_service.VAKIT_LABELS[v]}: {timings[v]}"
                  for v in VAKIT_KEYS if v in timings]
         self.prayer_info_var.set("  |  ".join(parts))
-
-    def _show_visual_notice(self, title: str, subtitle: str, on_dismiss) -> None:
-        """Zamanlayıcı (arka plan thread'i) tarafından çağrılır - Tkinter
-        pencereleri sadece ana thread'de oluşturulabildiğinden after(0, ...)
-        ile ana thread'e devredilir."""
-        def _show() -> None:
-            visual_notifier.show_visual_notice(self, title, subtitle, on_dismiss)
-        try:
-            self.after(0, _show)
-        except RuntimeError:
-            pass  # pencere kapanmışsa yok say
 
     # ---------- Ses ayarları sekmesi ----------
     def _refresh_devices(self) -> None:
