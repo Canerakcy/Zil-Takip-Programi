@@ -32,45 +32,38 @@ def get_config_path() -> Path:
 VAKIT_KEYS = ["imsak", "gunes", "ogle", "ikindi", "aksam", "yatsi"]
 
 
-def default_prayer_alert(vakit: str = "ogle", **overrides: Any) -> dict[str, Any]:
-    """Bir namaz vaktine bağlı, bağımsız bir bildirim/zil kaydı. Her vakite
-    istediğiniz kadar bağımsız kayıt eklenebilir (ör. Öğle için hem "30 dk
-    önce uyarı" hem "tam vaktinde ezan" hem "Cuma günleri 30 dk sonra
-    mesaiye dönüş" - üçü ayrı ayrı, aynı anda aktif olabilir)."""
-    alert = {
+def default_daily_vakit() -> dict[str, Any]:
+    """Günlük bir namaz vaktinin basit ayarı: açıksa, vakit girdiği ANDA
+    (dakika/yön hesabı olmadan) seçilen ses çalınır."""
+    return {"enabled": False, "sound": None}
+
+
+def default_friday_offset(**overrides: Any) -> dict[str, Any]:
+    """Cuma namazına özel, öğle/Cuma vaktine göre önce ya da sonra tetiklenen
+    bağımsız bir zil kaydı - ör. namazdan 15 dk önce paydos zili, namazdan
+    30 dk sonra mesaiye dönüş zili. İstediğiniz kadar kayıt eklenebilir."""
+    offset = {
         "id": str(uuid.uuid4()),
-        "vakit": vakit,
-        "label": "",  # boş bırakılırsa vakit adı + dakika/yöne göre otomatik üretilir
-        "minutes": 0,
-        # direction: "before" (vakitten X dk önce) ya da "after" (vakitten
-        # X dk sonra, ör. mesaiye/derse dönüş zili).
-        "direction": "before",
-        "sesli": False,
-        "gorsel": False,
+        "minutes": 15,
+        "direction": "before",  # "before" ya da "after"
+        "label": "",  # boş bırakılırsa dakika/yöne göre otomatik üretilir
         "sound": None,
         "enabled": True,
-        # friday_only: sadece Cuma günleri çalışır - Cuma namazı/Sela gibi
-        # sadece o güne özel kayıtlar için (öğle vaktinin kendisi normal
-        # günlerde de vardır, bu kayıt sadece Cuma'ya özel davranış ekler).
-        "friday_only": False,
     }
-    alert.update(overrides)
-    return alert
+    offset.update(overrides)
+    return offset
 
 
-def default_prayer_alerts() -> list[dict[str, Any]]:
-    """Sıfırdan bir kurulumda gelen örnek kayıtlar - eski 'Cuma Namazı'
-    sekmesinin orijinal varsayılanlarıyla birebir aynı (30 dk ve 15 dk önce
-    uyarı zili etkin, 30 dk sonra mesaiye dönüş zili örnek olarak eklenmiş
-    ama kapalı)."""
+def default_friday_offsets() -> list[dict[str, Any]]:
+    """Sıfırdan bir kurulumda gelen örnek kayıtlar - programın ilk sürümündeki
+    Cuma namazı varsayılanlarıyla birebir aynı."""
     return [
-        default_prayer_alert("ogle", minutes=30, direction="before", sesli=True,
-                              friday_only=True, label="Cuma Namazı - 30 dk kala"),
-        default_prayer_alert("ogle", minutes=15, direction="before", sesli=True,
-                              friday_only=True, label="Cuma Namazı - 15 dk kala"),
-        default_prayer_alert("ogle", minutes=30, direction="after", sesli=True,
-                              friday_only=True, enabled=False,
-                              label="Cuma Namazı Sonrası - Mesaiye Dönüş (30 dk sonra)"),
+        default_friday_offset(minutes=30, direction="before",
+                               label="Cuma Namazı - 30 dk kala"),
+        default_friday_offset(minutes=15, direction="before",
+                               label="Cuma Namazı - 15 dk kala"),
+        default_friday_offset(minutes=30, direction="after", enabled=False,
+                               label="Cuma Namazı Sonrası - Mesaiye Dönüş (30 dk sonra)"),
     ]
 
 
@@ -79,15 +72,10 @@ def default_prayer_times() -> dict[str, Any]:
         "enabled": True,
         "city": "İstanbul",
         "country": "Turkey",
-        "alerts": default_prayer_alerts(),
-        # "Görsel Uyarıdan Sonra Sese/Ezana Devam Et": açıksa önce görsel
-        # uyarı gösterilir, kapatılınca ses çalınır (sıralı); kapalıysa
-        # ikisi aynı anda başlar.
-        "gorsel_sonrasi_sesli": False,
-        "kerahat_hatirlat": False,
-        # Temkin Süresi (dk): hesaplanan tüm vakitlere eklenen güvenlik payı,
-        # negatif de olabilir (örn. -5 => 5 dk erken).
-        "temkin_suresi_dk": 0,
+        # Günlük vakit sesi: her vakit kendi vaktinde, açıksa seçilen sesi çalar.
+        "daily": {vakit: default_daily_vakit() for vakit in VAKIT_KEYS},
+        # Cuma namazına özel, öğle/Cuma vaktine göre önce/sonra kayıtlar.
+        "friday_offsets": default_friday_offsets(),
         "en_ustte_goster": False,
     }
 
@@ -131,84 +119,77 @@ def load_config() -> dict[str, Any]:
 
     # Eksik alanları varsayılanlarla tamamla (ileriye dönük uyumluluk için).
     # "prayer_times" burada KASITLI olarak atlanır - aşağıdaki göç bloğu onu
-    # eski "friday_prayer" içindeki il/ilçe bilgisini koruyarak kendi kurar;
-    # burada genel setdefault ile doldurulursa (city="İstanbul" dahil) göç
-    # bloğundaki pt.setdefault("city", ...) hiçbir zaman devreye giremez.
+    # eski sürümlerdeki il/ilçe bilgisini koruyarak kendi kurar.
     defaults = default_config()
     for key, value in defaults.items():
         if key == "prayer_times":
             continue
         cfg.setdefault(key, value)
 
-    # Eski "friday_prayer" (sadece Cuma/öğle önce-sonra zili) yapısından,
-    # tüm günlük vakitleri kapsayan "prayer_times" yapısına geçiş: eski il/
-    # ilçe bilgisi korunur, geri kalanı yeni varsayılanlarla başlar - eski
-    # alan artık kullanılmadığından siline
     old_friday = cfg.pop("friday_prayer", None)
-    # DİKKAT: setdefault'a default_prayer_times() (zaten city="İstanbul" dolu
-    # gelen) verilirse, aşağıdaki pt.setdefault("city", ...) hiçbir zaman
-    # devreye giremez - o yüzden burada bilerek BOŞ bir sözlükle başlanır,
-    # her alan kendi (eski veriyi koruyan) varsayılanıyla tek tek doldurulur.
     pt = cfg.setdefault("prayer_times", {})
     pt.setdefault("enabled", True)
     pt.setdefault("city", (old_friday or {}).get("city", "İstanbul"))
     pt.setdefault("country", (old_friday or {}).get("country", "Turkey"))
-    pt.setdefault("gorsel_sonrasi_sesli", False)
-    pt.setdefault("kerahat_hatirlat", False)
-    pt.setdefault("temkin_suresi_dk", 0)
     pt.setdefault("en_ustte_goster", False)
 
-    # "alerts" (her vakite birden fazla bağımsız kayıt eklenebilen esnek
-    # liste) - üç farklı önceki sürümden göç edilebilir: (1) en eski
-    # "friday_prayer.offsets", (2) bu oturumun bir önceki hali (tek satırlık
-    # "vakitler" sözlüğü + ayrı "sela" + "cuma_sela"), (3) hiçbiri yoksa
-    # sıfırdan kurulum. Idempotenttir - "alerts" zaten varsa dokunulmaz.
-    if "alerts" not in pt:
-        alerts: list[dict[str, Any]] = []
+    # "daily" (günlük vakit sesi) ve "friday_offsets" (Cuma namazına özel
+    # önce/sonra kayıtları) - programın geçmişteki dört farklı sürümünden
+    # göç edilebilir: (1) en eski "friday_prayer.offsets", (2) "alerts"
+    # listesi (bir önceki sürüm), (3) "vakitler" + "sela" + "cuma_sela"
+    # (ondan önceki sürüm), (4) hiçbiri yoksa sıfırdan kurulum. Idempotenttir.
+    if "daily" not in pt or "friday_offsets" not in pt:
+        daily = {vakit: default_daily_vakit() for vakit in VAKIT_KEYS}
+        friday_offsets: list[dict[str, Any]] = []
+
         if old_friday and old_friday.get("offsets"):
             for off in old_friday["offsets"]:
                 raw_sound = off.get("sound")
-                alerts.append(default_prayer_alert(
-                    "ogle",
-                    label=off.get("label", ""),
+                friday_offsets.append(default_friday_offset(
                     minutes=off.get("minutes", 0),
                     direction=off.get("direction", "before"),
-                    sesli=True, gorsel=False,
+                    label=off.get("label", ""),
                     sound=None if raw_sound in (None, "default") else raw_sound,
                     enabled=off.get("enabled", True),
-                    friday_only=True,
                 ))
+        elif "alerts" in pt:
+            for alert in pt.get("alerts", []):
+                if alert.get("friday_only"):
+                    friday_offsets.append(default_friday_offset(
+                        minutes=alert.get("minutes", 0),
+                        direction=alert.get("direction", "before"),
+                        label=alert.get("label", ""),
+                        sound=alert.get("sound"),
+                        enabled=alert.get("enabled", True),
+                    ))
+                else:
+                    vakit = alert.get("vakit")
+                    if vakit in daily and (alert.get("sesli") or alert.get("gorsel")):
+                        daily[vakit] = {"enabled": alert.get("enabled", True),
+                                         "sound": alert.get("sound")}
         elif "vakitler" in pt or "sela" in pt:
             for vakit, setting in pt.get("vakitler", {}).items():
-                if setting.get("sesli") or setting.get("gorsel"):
-                    alerts.append(default_prayer_alert(
-                        vakit,
-                        minutes=setting.get("minutes_before", 0),
-                        direction=setting.get("direction", "before"),
-                        sesli=setting.get("sesli", False),
-                        gorsel=setting.get("gorsel", False),
-                        sound=setting.get("sound"),
-                    ))
+                if vakit in daily and (setting.get("sesli") or setting.get("gorsel")):
+                    daily[vakit] = {"enabled": True, "sound": setting.get("sound")}
             sela = pt.get("sela", {})
             if sela.get("sesli") or sela.get("gorsel"):
-                alerts.append(default_prayer_alert(
-                    "ogle", label="Sela",
+                friday_offsets.append(default_friday_offset(
                     minutes=sela.get("minutes_before", 0),
                     direction=sela.get("direction", "before"),
-                    sesli=sela.get("sesli", False),
-                    gorsel=sela.get("gorsel", False),
+                    label="Sela",
                     sound=sela.get("sound"),
                     enabled=bool(pt.get("cuma_sela")),
-                    friday_only=True,
                 ))
         else:
-            alerts = default_prayer_alerts()
-        pt["alerts"] = alerts
+            friday_offsets = default_friday_offsets()
+
+        pt["daily"] = daily
+        pt["friday_offsets"] = friday_offsets
 
     # Artık kullanılmayan eski alanlar temizlenir.
-    pt.pop("vakitler", None)
-    pt.pop("sela", None)
-    pt.pop("cuma_sela", None)
+    for stale_key in ("vakitler", "sela", "cuma_sela", "alerts",
+                       "gorsel_sonrasi_sesli", "kerahat_hatirlat", "temkin_suresi_dk"):
+        pt.pop(stale_key, None)
     return cfg
 
 
