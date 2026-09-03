@@ -17,6 +17,7 @@ import autostart
 import prayer_service
 from config_store import VAKIT_KEYS, load_config, save_config
 from scheduler import BellScheduler
+from single_instance import SingleInstance
 
 try:
     import tray_icon
@@ -268,7 +269,7 @@ class HolidayDialog(tk.Toplevel):
 
 
 class App(tk.Tk):
-    def __init__(self):
+    def __init__(self, instance: Optional[SingleInstance] = None):
         super().__init__()
         self.title(APP_TITLE)
         self.geometry("860x660")
@@ -280,6 +281,9 @@ class App(tk.Tk):
         self.cfg = load_config()
         self._file_logger = app_logging.get_logger()
         self._tray: Optional["tray_icon.TrayIcon"] = None
+        self._instance = instance
+        if self._instance is not None:
+            self.after(200, self._poll_instance_queue)
 
         self._build_ui()
         self._refresh_entries_tree()
@@ -918,15 +922,30 @@ class App(tk.Tk):
             while True:
                 cmd = self._tray.commands.get_nowait()
                 if cmd == tray_icon.SHOW:
-                    self.deiconify()
-                    self.lift()
-                    self.focus_force()
+                    self._show_window()
                 elif cmd == tray_icon.QUIT:
                     self._quit_app()
                     return
         except queue.Empty:
             pass
         self.after(200, self._poll_tray_queue)
+
+    def _show_window(self) -> None:
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+
+    # ---------- Genel: tekil örnek (exe tekrar açılırsa) ----------
+    def _poll_instance_queue(self) -> None:
+        if self._instance is None:
+            return
+        try:
+            while True:
+                self._instance.show_requests.get_nowait()
+                self._show_window()
+        except queue.Empty:
+            pass
+        self.after(200, self._poll_instance_queue)
 
     def _save_tray_setting(self) -> None:
         self.cfg["minimize_to_tray"] = self.tray_var.get()
