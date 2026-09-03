@@ -374,6 +374,50 @@ class App(tk.Tk):
         self.log_text.tag_configure("error", foreground="#b3261e")
         self.log_text.tag_configure("info", foreground="#555555")
 
+    def _make_scrollable(self, parent: ttk.Frame) -> ttk.Frame:
+        """İçeriği pencere yüksekliğini aşan sekmeler için (ör. Namaz
+        Vakitleri) dikey kaydırmalı bir alan kurar; fare tekerleği ve
+        kaydırma çubuğuyla alttaki içeriğe (butonlar, tablolar) erişilebilir.
+        Döndürülen frame'e widget'lar normal şekilde eklenir."""
+        canvas = tk.Canvas(parent, bg=BG, highlightthickness=0)
+        scrollbar = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        canvas.configure(yscrollcommand=scrollbar.set)
+        canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+
+        inner = ttk.Frame(canvas)
+        inner_window = canvas.create_window((0, 0), window=inner, anchor="nw")
+
+        def _on_inner_configure(_event=None) -> None:
+            canvas.configure(scrollregion=canvas.bbox("all"))
+
+        def _on_canvas_configure(event) -> None:
+            canvas.itemconfig(inner_window, width=event.width)
+
+        inner.bind("<Configure>", _on_inner_configure)
+        canvas.bind("<Configure>", _on_canvas_configure)
+
+        def _on_mousewheel(event) -> None:
+            if event.num == 5 or event.delta < 0:
+                canvas.yview_scroll(1, "units")
+            elif event.num == 4 or event.delta > 0:
+                canvas.yview_scroll(-1, "units")
+
+        def _bind_mousewheel(_event=None) -> None:
+            canvas.bind_all("<MouseWheel>", _on_mousewheel)
+            canvas.bind_all("<Button-4>", _on_mousewheel)
+            canvas.bind_all("<Button-5>", _on_mousewheel)
+
+        def _unbind_mousewheel(_event=None) -> None:
+            canvas.unbind_all("<MouseWheel>")
+            canvas.unbind_all("<Button-4>")
+            canvas.unbind_all("<Button-5>")
+
+        canvas.bind("<Enter>", _bind_mousewheel)
+        canvas.bind("<Leave>", _unbind_mousewheel)
+
+        return inner
+
     def _build_header(self) -> None:
         header = ttk.Frame(self, style="Header.TFrame")
         header.pack(fill="x")
@@ -420,7 +464,7 @@ class App(tk.Tk):
             side="left", padx=4)
 
     def _build_prayer_tab(self) -> None:
-        frame = self.prayer_tab
+        frame = self._make_scrollable(self.prayer_tab)
         pt = self.cfg["prayer_times"]
 
         top = ttk.Frame(frame)
