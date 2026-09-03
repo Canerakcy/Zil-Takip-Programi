@@ -314,8 +314,8 @@ class App(tk.Tk):
         style.configure("TLabelframe", background=BG, bordercolor="#c9d3ce")
         style.configure("TLabelframe.Label", background=BG, font=FONT_BOLD, foreground=ACCENT_DARK)
         style.configure("TLabel", background=BG, font=FONT)
-        style.configure("TCheckbutton", background=BG, font=FONT)
-        style.configure("TRadiobutton", background=BG, font=FONT)
+        style.configure("TCheckbutton", background=BG, font=FONT, focuscolor=BG)
+        style.configure("TRadiobutton", background=BG, font=FONT, focuscolor=BG)
         style.configure("TNotebook", background=BG, tabmargins=(4, 6, 4, 0))
         style.configure("TNotebook.Tab", font=FONT_BOLD, padding=(14, 8))
         style.map("TNotebook.Tab", background=[("selected", ACCENT)],
@@ -348,7 +348,7 @@ class App(tk.Tk):
     def _build_ui(self) -> None:
         self._build_header()
 
-        notebook = ttk.Notebook(self)
+        notebook = self.notebook = ttk.Notebook(self)
         notebook.pack(fill="both", expand=True, padx=10, pady=(6, 10))
 
         self.entries_tab = ttk.Frame(notebook)
