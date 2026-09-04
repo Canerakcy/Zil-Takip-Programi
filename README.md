@@ -25,6 +25,22 @@ projelerde çok yaygındır. Devam etmek için:
 `zil_takip/` klasöründeki kodu inceleyip kendiniz de derleyebilirsiniz;
 bkz. aşağıdaki "Kendi bilgisayarınızda elle derlemek" bölümü.)
 
+### 📱 Android sürümü
+
+Aynı programın Android (telefon/tablet) karşılığı `zil_takip_android/`
+klasöründedir, Flutter ile yazılmıştır ve Windows sürümüyle aynı
+özellikleri sunar (Zil Programı, Namaz Vakitleri + Cuma Namazı, Genel
+Ayarlar). Ekran kapalıyken/uygulama arka plandayken de çalışabilmesi için
+kalıcı bir bildirimle "ön plan servisi" olarak çalışır - bu yüzden
+bildirim çubuğunda sürekli bir "Ceselsan Zil Takip arka planda çalışıyor"
+bildirimi görünür, bu normaldir ve kapatılmamalıdır (kapatılırsa Android
+servisi durdurabilir).
+
+**👉 [Releases sayfasından en güncel `android-v*` etiketli sürümü indirin](https://github.com/Canerakcy/Zil-Takip-Programi/releases)**
+(`.apk` dosyasını telefona indirip açtığınızda "bilinmeyen kaynaklardan
+yükleme"ye izin vermeniz istenebilir - Play Store dışından kurulum
+yaptığınız için bu normaldir.)
+
 ## Ekran Görüntüleri
 
 | Zil Programı | Cuma Namazı |

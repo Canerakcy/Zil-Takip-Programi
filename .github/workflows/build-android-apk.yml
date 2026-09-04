@@ -1,0 +1,67 @@
+name: Android APK Derle
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["android-v*"]
+    paths:
+      - "zil_takip_android/**"
+      - ".github/workflows/build-android-apk.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: zil_takip_android
+    steps:
+      - name: Kodu al
+        uses: actions/checkout@v4
+
+      - name: Java kur
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Flutter kur
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.2"
+          channel: "stable"
+
+      - name: Bağımlılıkları kur
+        run: flutter pub get
+
+      - name: Statik analiz
+        run: flutter analyze
+
+      - name: Testleri çalıştır
+        run: flutter test
+
+      - name: Sürüm numarası oluştur
+        id: version
+        shell: bash
+        run: echo "tag=android-v1.0.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
+      - name: APK oluştur (release)
+        run: flutter build apk --release --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
+
+      - name: APK'yı yükle (Actions Artifacts)
+        uses: actions/upload-artifact@v4
+        with:
+          name: CeselsanZilTakip-android-apk
+          path: zil_takip_android/build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
+
+      - name: GitHub Release oluştur (her derleme yeni bir sürüm)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "Ceselsan Zil Takip Android ${{ steps.version.outputs.tag }}"
+          make_latest: false
+          files: zil_takip_android/build/app/outputs/flutter-apk/app-release.apk
