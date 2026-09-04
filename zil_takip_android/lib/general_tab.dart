@@ -2,6 +2,7 @@
 // başlatma, tatil günleri ve kayıt (log) görünümü. Windows sürümündeki
 // _build_general_tab()/_build_audio_tab()'ın karşılığı.
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'background_service.dart';
 import 'dialogs.dart';
@@ -24,6 +25,32 @@ class GeneralTab extends StatefulWidget {
 }
 
 class _GeneralTabState extends State<GeneralTab> {
+  bool? _batteryOptimizationIgnored;
+
+  @override
+  void initState() {
+    super.initState();
+    _refreshBatteryOptimizationStatus();
+  }
+
+  Future<void> _refreshBatteryOptimizationStatus() async {
+    try {
+      final status = await Permission.ignoreBatteryOptimizations.status;
+      if (mounted) setState(() => _batteryOptimizationIgnored = status.isGranted);
+    } catch (_) {
+      // Bu platformda/ortamda desteklenmiyor olabilir.
+    }
+  }
+
+  Future<void> _requestBatteryOptimizationExemption() async {
+    try {
+      await Permission.ignoreBatteryOptimizations.request();
+    } catch (_) {
+      // Bu platformda/ortamda desteklenmiyor olabilir.
+    }
+    await _refreshBatteryOptimizationStatus();
+  }
+
   Future<void> _pickDefaultSound() async {
     final path = await pickSoundFile();
     if (path == null) return;
@@ -91,16 +118,34 @@ class _GeneralTabState extends State<GeneralTab> {
         Text('Genel Ayarlar', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         Card(
-          child: SwitchListTile(
-            title: const Text('Telefon Açılınca Otomatik Başlat'),
-            subtitle:
-                const Text('Cihaz yeniden başlatıldığında servis otomatik başlar.'),
-            value: config.startOnBoot,
-            onChanged: (value) {
-              setState(() => config.startOnBoot = value);
-              widget.onChanged();
-              initializeBackgroundService(autoStartOnBoot: value);
-            },
+          child: Column(
+            children: [
+              SwitchListTile(
+                title: const Text('Telefon Açılınca Otomatik Başlat'),
+                subtitle: const Text(
+                    'Cihaz yeniden başlatıldığında servis otomatik başlar.'),
+                value: config.startOnBoot,
+                onChanged: (value) {
+                  setState(() => config.startOnBoot = value);
+                  widget.onChanged();
+                  initializeBackgroundService(autoStartOnBoot: value);
+                },
+              ),
+              const Divider(height: 1),
+              ListTile(
+                title: const Text('Pil Optimizasyonundan Muaf Tut'),
+                subtitle: Text(_batteryOptimizationIgnored == true
+                    ? 'Etkin - Android arka plan servisini kapatmayacak.'
+                    : 'Kapalı - bazı telefonlarda (ör. Samsung) servis bir '
+                        'süre sonra durdurulabilir, açmanız önerilir.'),
+                trailing: _batteryOptimizationIgnored == true
+                    ? const Icon(Icons.check_circle, color: Colors.green)
+                    : FilledButton(
+                        onPressed: _requestBatteryOptimizationExemption,
+                        child: const Text('Aç'),
+                      ),
+              ),
+            ],
           ),
         ),
         const SizedBox(height: 24),

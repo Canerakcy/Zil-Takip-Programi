@@ -41,6 +41,23 @@ servisi durdurabilir).
 yükleme"ye izin vermeniz istenebilir - Play Store dışından kurulum
 yaptığınız için bu normaldir.)
 
+**AUX/kulaklık jakı ile hoparlöre bağlama:** Ekstra bir ayar gerekmez -
+telefonu kabloyla (jack/aux) bir hoparlöre bağladığınızda Android sesi
+otomatik olarak oraya yönlendirir, uygulama içinde ayrıca "çıkış cihazı
+seç" diye bir şeye gerek yoktur (Windows sürümündeki hoparlör seçiminin
+Android karşılığı işletim sistemi tarafından otomatik yapılır).
+
+**Arka planda kesintisiz çalışması için:** Uygulama ilk açıldığında sizden
+"pil optimizasyonundan muaf tut" izni ister - **mutlaka izin verin**,
+aksi halde bazı telefonlar (özellikle Samsung) bir süre sonra arka plan
+servisini durdurup zilleri kesebilir. İzni kaçırdıysanız **Genel**
+sekmesinden "Pil Optimizasyonundan Muaf Tut" satırındaki **Aç**
+butonuyla tekrar açabilirsiniz. Bazı Samsung telefonlarda ayrıca
+**Ayarlar > Pil > Arka Plan Kullanımı Sınırları > Uyku Modundaki
+Uygulamalar** listesinde Ceselsan Zil Takip varsa oradan çıkarmanız
+gerekebilir - üretici bu listeyi uygulama içinden kontrol edilemeyen,
+ayrı bir kısıtlama olarak tutar.
+
 ## Ekran Görüntüleri
 
 | Zil Programı | Cuma Namazı |

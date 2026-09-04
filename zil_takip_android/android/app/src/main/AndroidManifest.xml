@@ -3,6 +3,14 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Arka plan servisinin kalıcı bildirimini göstermek için (Android 13+). -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Android 14+ (API 34), foreground servis türü olarak "mediaPlayback"
+         kullanılmasını bu izinle şart koşuyor. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"/>
+    <!-- Kullanıcıya "pil optimizasyonundan muaf tut" iznini isteyebilmek için
+         (Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS) - arka plan
+         servisinin özellikle bazı Android üreticilerinde (Samsung vb.) pil
+         tasarrufu tarafından öldürülmesini önlemek için kritik. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
     <!-- Diğer FOREGROUND_SERVICE/RECEIVE_BOOT_COMPLETED/WAKE_LOCK izinleri ve
          servis/receiver bildirimleri flutter_background_service eklentisinin
          kendi AndroidManifest.xml'inden derleme sırasında birleştirilir. -->

@@ -50,6 +50,9 @@ Future<void> initializeBackgroundService({bool autoStartOnBoot = false}) async {
       initialNotificationContent: 'Arka planda çalışıyor',
       foregroundServiceNotificationId: foregroundNotificationId,
       autoStartOnBoot: autoStartOnBoot,
+      // Android 14+ (API 34) foreground servisler için bir tür belirtilmesini
+      // zorunlu kılıyor; zil sesi çaldığımız için "mediaPlayback" en uygunu.
+      foregroundServiceTypes: const [AndroidForegroundType.mediaPlayback],
     ),
     iosConfiguration: IosConfiguration(),
   );

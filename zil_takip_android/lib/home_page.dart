@@ -32,6 +32,7 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _load();
     _requestNotificationPermission();
+    _requestBatteryOptimizationExemption();
     try {
       _logSub = FlutterBackgroundService().on('log').listen((event) {
         if (event == null) return;
@@ -66,6 +67,22 @@ class _HomePageState extends State<HomePage> {
       await Permission.notification.request();
     } catch (_) {
       // Bu platformda/ortamda izin isteği desteklenmiyor olabilir.
+    }
+  }
+
+  Future<void> _requestBatteryOptimizationExemption() async {
+    // Android'in pil optimizasyonu, foreground service + bildirim olsa bile
+    // bazı üreticilerde (özellikle Samsung) arka plan servisini bir süre
+    // sonra durdurabiliyor. Bu izin, uygulamayı o kısıtlamadan muaf tutar -
+    // zil takibinin ekran kapalıyken/uygulama arka plandayken kesintisiz
+    // çalışması için gereklidir.
+    try {
+      final status = await Permission.ignoreBatteryOptimizations.status;
+      if (!status.isGranted) {
+        await Permission.ignoreBatteryOptimizations.request();
+      }
+    } catch (_) {
+      // Bu platformda/ortamda desteklenmiyor olabilir.
     }
   }
 
