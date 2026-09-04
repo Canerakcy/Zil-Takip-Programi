@@ -22,10 +22,16 @@ jobs:
       - name: Kodu al
         uses: actions/checkout@v4
 
+      # Python 3.8, resmi olarak Windows 7'yi destekleyen SON Python
+      # sürümüdür (3.9'dan itibaren Windows 8.1+ zorunlu kılınmıştır).
+      # PyInstaller, uygulamayı bu sürümün Python çalışma zamanıyla birlikte
+      # paketlediği için, üretilen .exe'nin Windows 7'de açılabilmesi için
+      # burada 3.8 kullanılması ŞARTTIR - daha yeni bir sürüm kullanılırsa
+      # exe Windows 7'de hiç başlamaz.
       - name: Python kur
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.8"
 
       - name: Bağımlılıkları kur
         run: |
