@@ -28,7 +28,14 @@ android {
         // (permission_handler 19, audioplayers 19, background_service 16) bu
         // sınırın altında kalıyor.
         minSdk = 21
-        targetSdk = flutter.targetSdkVersion
+        // flutter.targetSdkVersion bu Flutter sürümünde 36 (Android 16) gibi
+        // çok yeni/deneysel bir seviyeye varsayılan oluyor - gerçek cihazlarda
+        // (test cihazımız Android 13/14) uygulamanın açılır açılmaz çökmesine
+        // yol açtı. Android 14 (foreground service türü zorunluluğunun zaten
+        // tanımlı ve iyi test edilmiş olduğu, cihazımızla birebir eşleşen)
+        // sürümüne sabitlendi. compileSdk yine de flutter'ın varsayılanında
+        // kalıyor (bağımlılıkların derleme zamanı ihtiyacı için).
+        targetSdk = 34
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
