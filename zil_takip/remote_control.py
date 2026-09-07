@@ -31,8 +31,9 @@ from typing import Any, Callable, Optional
 PAIRING_UDP_PORT = 47601
 CONTROL_TCP_PORT = 47602
 PROTOCOL_VERSION = 1
-PAIRING_CODE_TTL_SECONDS = 300  # üretilen kod 5 dakika sonra geçersiz olur
-DISCOVERY_TIMEOUT_SECONDS = 20  # kod ile bağlanmaya çalışırken beklenecek azami süre
+PAIRING_CODE_TTL_SECONDS = 300  # üretilen kod, kimse girmeden 5 dakika sonra geçersiz olur
+DISCOVERY_TIMEOUT_SECONDS = 20  # kod ile bağlanmaya çalışırken (karşı taraf bulunana kadar) beklenecek azami süre
+APPROVAL_TIMEOUT_SECONDS = 30  # karşı cihazda onay diyaloğu bu süre içinde yanıtlanmazsa otomatik reddedilir
 LOCATE_TIMEOUT_SECONDS = 5
 
 
@@ -209,9 +210,21 @@ class RemoteControlManager:
             if not code or msg.get("code") != code:
                 return  # bu bizim kodumuz değil - sessizce yok say
             requester_name = str(msg.get("name") or "Bilinmeyen Cihaz")
+            # Kod, eşleşen İLK istekte hemen (onay beklenmeden) geçersiz
+            # kılınır - aksi halde aynı kodla art arda/eşzamanlı gelen bir
+            # istek de eşleşip ikinci bir onay diyaloğu tetikleyebilir
+            # (kod tekrar kullanılmış olur). Reddedilse bile kod bir daha
+            # kullanılamaz; yeni bir kod üretmek gerekir.
+            with self._lock:
+                self._active_code = None
             _send_udp_to(self._udp_sock, {"v": PROTOCOL_VERSION, "type": "pair_ack"}, addr)
 
+            decided = threading.Event()
+
             def decide(approved: bool) -> None:
+                if decided.is_set():
+                    return
+                decided.set()
                 if approved:
                     token = generate_token()
                     peer = PairedDevice(peer_id=uuid.uuid4().hex, name=requester_name,
@@ -228,9 +241,16 @@ class RemoteControlManager:
                     _send_udp_to(self._udp_sock, {
                         "v": PROTOCOL_VERSION, "type": "pair_response", "approved": False,
                     }, addr)
-                with self._lock:
-                    self._active_code = None
 
+            # Onay diyaloğunu gösteren taraf (ör. Tkinter penceresi) kendi
+            # süresini dolduramaz/çökerse bile istek sonsuza kadar askıda
+            # kalmasın diye, burada da bağımsız bir zaman aşımı korumasıyla
+            # otomatik reddediliyor.
+            def timeout_guard() -> None:
+                if not decided.wait(APPROVAL_TIMEOUT_SECONDS):
+                    decide(False)
+
+            threading.Thread(target=timeout_guard, daemon=True).start()
             self._on_pairing_request(requester_name, decide)
 
         elif msg_type == "locate_request":
@@ -275,7 +295,10 @@ class RemoteControlManager:
                 if msg.get("type") == "pair_ack" and not got_ack:
                     got_ack = True
                     on_status("İstek gönderildi, karşı cihazda onay bekleniyor...")
-                    deadline = time.time() + 90  # insan onayı için daha uzun süre tanı
+                    # Karşı taraf en fazla APPROVAL_TIMEOUT_SECONDS içinde karar
+                    # verir (bkz. RemoteControlManager._handle_udp_message);
+                    # burada ağ gecikmesi için birkaç saniye pay bırakılıyor.
+                    deadline = time.time() + APPROVAL_TIMEOUT_SECONDS + 5
                 elif msg.get("type") == "pair_response":
                     if not msg.get("approved"):
                         on_status("Karşı cihaz isteği reddetti.")
@@ -425,6 +448,16 @@ class RemoteControlManager:
                 self._apply_remote_config(new_cfg)
                 self._on_log(f"'{peer.name}' ayarları uzaktan değiştirdi.")
                 return {"ok": True}
+            if cmd == "unpair":
+                # Karşı taraf eşleştirmeyi kendi tarafında kaldırdı - biz de
+                # kaldırıyoruz, aksi halde bu taraf artık geçersiz/ölü bir
+                # eşleştirmeyi göstermeye devam eder (kullanınca "kimlik
+                # doğrulama reddedildi" hatası alır ama listeden hiç
+                # temizlenmez).
+                self.paired_devices = [p for p in self.paired_devices if p.token != peer.token]
+                self._on_devices_changed()
+                self._on_log(f"'{peer.name}' eşleştirmeyi kaldırdı.")
+                return {"ok": True}
             return {"ok": False, "error": f"Bilinmeyen komut: {cmd}"}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
@@ -435,5 +468,19 @@ class RemoteControlManager:
             self._on_devices_changed_cb()
 
     def remove_paired_device(self, peer_id: str) -> None:
+        peer = next((p for p in self.paired_devices if p.peer_id == peer_id), None)
         self.paired_devices = [p for p in self.paired_devices if p.peer_id != peer_id]
         self._on_devices_changed()
+        if peer is not None:
+            # Karşı tarafa da haber ver ki orada da otomatik temizlensin -
+            # aksi halde orada geçersiz/"ölü" bir eşleştirme kalır. Bu iyi
+            # niyetli (best-effort) bir bildirimdir: karşı cihaz kapalıysa/
+            # ağda değilse sessizce başarısız olur, yerel kaldırma zaten
+            # tamamlanmıştır.
+            threading.Thread(target=self._notify_unpair, args=(peer,), daemon=True).start()
+
+    def _notify_unpair(self, peer: PairedDevice) -> None:
+        try:
+            self.send_command(peer, {"cmd": "unpair"}, timeout=4.0)
+        except Exception:
+            pass

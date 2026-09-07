@@ -13,11 +13,22 @@ class GeneralTab extends StatefulWidget {
   final VoidCallback onChanged;
   final List<String> logLines;
 
+  /// Bu sekme, eşleşmiş UZAK bir cihazın ayarlarını göstermek için mi
+  /// kullanılıyor (bkz. RemoteSettingsPage)? Telefon açılınca otomatik
+  /// başlatma ve pil optimizasyonu muafiyeti Android izin/servis
+  /// çağrılarını HER ZAMAN bu widget'ı ÇALIŞTIRAN (yani kontrol eden)
+  /// telefonda tetikler - uzak bir cihazın ayarlarını görüntülerken bunlar
+  /// yanlışlıkla kontrol eden telefonu etkiler (izin isteği açar/otomatik
+  /// başlatmayı değiştirir). Bu yüzden uzak modda bu bölüm tamamen
+  /// gizlenir.
+  final bool isRemote;
+
   const GeneralTab({
     super.key,
     required this.config,
     required this.onChanged,
     required this.logLines,
+    this.isRemote = false,
   });
 
   @override
@@ -30,7 +41,9 @@ class _GeneralTabState extends State<GeneralTab> {
   @override
   void initState() {
     super.initState();
-    _refreshBatteryOptimizationStatus();
+    if (!widget.isRemote) {
+      _refreshBatteryOptimizationStatus();
+    }
   }
 
   Future<void> _refreshBatteryOptimizationStatus() async {
@@ -94,6 +107,19 @@ class _GeneralTabState extends State<GeneralTab> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (widget.isRemote)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Text(
+              'Not: Bir ses dosyası seçerseniz, seçtiğiniz dosya BU telefondadır - '
+              'eşleşmiş cihaz o dosyaya erişemeyebilir. Ses dosyalarını mümkünse '
+              'doğrudan ilgili cihazın kendisinde ayarlayın.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: Colors.orange[800]),
+            ),
+          ),
         Text('Ses Ayarları', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         Card(
@@ -129,40 +155,50 @@ class _GeneralTabState extends State<GeneralTab> {
             ],
           ),
         ),
-        const SizedBox(height: 24),
-        Text('Genel Ayarlar', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Card(
-          child: Column(
-            children: [
-              SwitchListTile(
-                title: const Text('Telefon Açılınca Otomatik Başlat'),
-                subtitle: const Text(
-                    'Cihaz yeniden başlatıldığında servis otomatik başlar.'),
-                value: config.startOnBoot,
-                onChanged: (value) {
-                  setState(() => config.startOnBoot = value);
-                  widget.onChanged();
-                  initializeBackgroundService(autoStartOnBoot: value);
-                },
-              ),
-              const Divider(height: 1),
-              ListTile(
-                title: const Text('Pil Optimizasyonundan Muaf Tut'),
-                subtitle: Text(_batteryOptimizationIgnored == true
-                    ? 'Etkin - Android arka plan servisini kapatmayacak.'
-                    : 'Kapalı - bazı telefonlarda (ör. Samsung) servis bir '
-                        'süre sonra durdurulabilir, açmanız önerilir.'),
-                trailing: _batteryOptimizationIgnored == true
-                    ? const Icon(Icons.check_circle, color: Colors.green)
-                    : FilledButton(
-                        onPressed: _requestBatteryOptimizationExemption,
-                        child: const Text('Aç'),
-                      ),
-              ),
-            ],
+        if (!widget.isRemote) ...[
+          const SizedBox(height: 24),
+          Text('Genel Ayarlar', style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8),
+          Card(
+            child: Column(
+              children: [
+                SwitchListTile(
+                  title: const Text('Telefon Açılınca Otomatik Başlat'),
+                  subtitle: const Text(
+                      'Cihaz yeniden başlatıldığında servis otomatik başlar.'),
+                  value: config.startOnBoot,
+                  onChanged: (value) {
+                    setState(() => config.startOnBoot = value);
+                    widget.onChanged();
+                    initializeBackgroundService(autoStartOnBoot: value);
+                  },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('Pil Optimizasyonundan Muaf Tut'),
+                  subtitle: Text(_batteryOptimizationIgnored == true
+                      ? 'Etkin - Android arka plan servisini kapatmayacak.'
+                      : 'Kapalı - bazı telefonlarda (ör. Samsung) servis bir '
+                          'süre sonra durdurulabilir, açmanız önerilir.'),
+                  trailing: _batteryOptimizationIgnored == true
+                      ? const Icon(Icons.check_circle, color: Colors.green)
+                      : FilledButton(
+                          onPressed: _requestBatteryOptimizationExemption,
+                          child: const Text('Aç'),
+                        ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ] else ...[
+          const SizedBox(height: 24),
+          Text(
+            'Telefon açılınca otomatik başlatma ve pil optimizasyonu muafiyeti gibi bu '
+            'cihaza özgü ayarlar burada gösterilmez - bunlar yalnızca eşleşmiş cihazın '
+            'kendisinde değiştirilebilir.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
         const SizedBox(height: 24),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

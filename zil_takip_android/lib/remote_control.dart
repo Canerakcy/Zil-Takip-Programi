@@ -25,9 +25,9 @@ import 'dart:math';
 const int pairingUdpPort = 47601;
 const int controlTcpPort = 47602;
 const int protocolVersion = 1;
-const int pairingCodeTtlSeconds = 300; // üretilen kod 5 dakika sonra geçersiz olur
-const int discoveryTimeoutSeconds = 20; // kod ile bağlanmaya çalışırken beklenecek azami süre
-const int approvalTimeoutSeconds = 90; // karşı taraf onaylayana kadar beklenecek süre
+const int pairingCodeTtlSeconds = 300; // üretilen kod, kimse girmeden 5 dakika sonra geçersiz olur
+const int discoveryTimeoutSeconds = 20; // kod ile bağlanmaya çalışırken (karşı taraf bulunana kadar) beklenecek azami süre
+const int approvalTimeoutSeconds = 30; // karşı cihazda onay diyaloğu bu süre içinde yanıtlanmazsa otomatik reddedilir
 const int locateTimeoutSeconds = 5;
 
 final Random _random = Random.secure();
@@ -247,9 +247,17 @@ class RemoteControlService {
       final code = _currentCode;
       if (code == null || msg['code'] != code) return; // bizim kodumuz değil
       final requesterName = (msg['name'] as String?) ?? 'Bilinmeyen Cihaz';
+      // Kod, eşleşen İLK istekte hemen (onay beklenmeden) geçersiz kılınır -
+      // aksi halde aynı kodla art arda/eşzamanlı gelen bir istek de eşleşip
+      // ikinci bir onay isteği tetikleyebilir (kod tekrar kullanılmış olur).
+      // Reddedilse bile kod bir daha kullanılamaz; yeni bir kod üretmek gerekir.
+      _activeCode = null;
       _sendUdpTo({'v': protocolVersion, 'type': 'pair_ack'}, addr, port);
 
-      onPairingRequest(requesterName, (approved) {
+      var decided = false;
+      void decide(bool approved) {
+        if (decided) return;
+        decided = true;
         if (approved) {
           final token = generateToken();
           final peer = PairedDevice(
@@ -272,8 +280,13 @@ class RemoteControlService {
           _sendUdpTo(
               {'v': protocolVersion, 'type': 'pair_response', 'approved': false}, addr, port);
         }
-        _activeCode = null;
-      });
+      }
+
+      // Onay ekranını gösteren taraf (ör. UI isolate'i) kendi süresini
+      // dolduramaz/gecikirse bile istek sonsuza kadar askıda kalmasın diye,
+      // burada da bağımsız bir zaman aşımı koruması var.
+      Timer(const Duration(seconds: approvalTimeoutSeconds), () => decide(false));
+      onPairingRequest(requesterName, decide);
     } else if (type == 'locate_request') {
       final token = msg['token'];
       final hasMatch = pairedDevices.any((p) => p.token == token);
@@ -526,6 +539,15 @@ class RemoteControlService {
           await applyRemoteConfig(newCfg);
           onLog("'${peer.name}' ayarları uzaktan değiştirdi.");
           return {'ok': true};
+        case 'unpair':
+          // Karşı taraf eşleştirmeyi kendi tarafında kaldırdı - biz de
+          // kaldırıyoruz, aksi halde bu taraf artık geçersiz/ölü bir
+          // eşleştirmeyi göstermeye devam eder (kullanınca "kimlik
+          // doğrulama reddedildi" hatası alır ama listeden hiç temizlenmez).
+          pairedDevices.removeWhere((p) => p.token == peer.token);
+          onDevicesChanged?.call();
+          onLog("'${peer.name}' eşleştirmeyi kaldırdı.");
+          return {'ok': true};
         default:
           return {'ok': false, 'error': 'Bilinmeyen komut: $cmd'};
       }
@@ -535,7 +557,19 @@ class RemoteControlService {
   }
 
   void removePairedDevice(String peerId) {
+    final peer = pairedDevices.where((p) => p.peerId == peerId).firstOrNull;
     pairedDevices.removeWhere((p) => p.peerId == peerId);
     onDevicesChanged?.call();
+    if (peer != null) {
+      // Karşı tarafa da haber ver ki orada da otomatik temizlensin - iyi
+      // niyetli (best-effort) bir bildirimdir: karşı cihaz kapalıysa/ağda
+      // değilse sessizce başarısız olur, yerel kaldırma zaten tamamlanmıştır.
+      sendCommand(peer, {'cmd': 'unpair'}, timeout: const Duration(seconds: 4))
+          .catchError((_) => <String, dynamic>{});
+    }
   }
+}
+
+extension _FirstOrNullExtension<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

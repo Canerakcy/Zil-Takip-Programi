@@ -141,7 +141,11 @@ class _RemoteSettingsPageState extends State<RemoteSettingsPage> {
                   children: [
                     EntriesTab(config: config, onChanged: _onChanged, onTest: _onTest),
                     PrayerTab(config: config, onChanged: _onChanged, onTest: _onTest),
-                    GeneralTab(config: config, onChanged: _onChanged, logLines: const []),
+                    GeneralTab(
+                        config: config,
+                        onChanged: _onChanged,
+                        logLines: const [],
+                        isRemote: true),
                   ],
                 ),
       bottomNavigationBar: config == null

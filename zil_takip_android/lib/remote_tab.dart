@@ -3,6 +3,7 @@
 // ayarları görüntüle/değiştir). Windows sürümündeki "🔗 Uzaktan Erişim"
 // sekmesinin karşılığıdır - aynı yerel ağ (WiFi/LAN) protokolünü konuşur.
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_background_service/flutter_background_service.dart';
 
 import 'remote_bridge.dart';
@@ -76,6 +77,15 @@ class _RemoteTabState extends State<RemoteTab> {
     } catch (_) {
       // Arka plan servisi bu platformda/ortamda kullanılamıyor olabilir.
     }
+  }
+
+  Future<void> _copyPairingCode() async {
+    final code = _pairingCode;
+    if (code == null) return;
+    await Clipboard.setData(ClipboardData(text: code));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Kod kopyalandı.')));
   }
 
   void _generateCode() {
@@ -172,23 +182,44 @@ class _RemoteTabState extends State<RemoteTab> {
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),
-            child: Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 FilledButton.icon(
                   onPressed: _generateCode,
                   icon: const Icon(Icons.vpn_key),
                   label: const Text('Kod Oluştur'),
                 ),
-                const SizedBox(width: 16),
-                if (_pairingCode != null)
-                  Expanded(
-                    child: Text(
-                      _pairingCode!,
-                      style: const TextStyle(
-                          fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+                // Kod 5-20 hane olabildiğinden, butonla aynı satıra
+                // sığdırmaya çalışmak (eski tasarım) uzun kodların
+                // kesilmesine/görünmemesine yol açıyordu - kendi geniş
+                // satırında, kaydırabilen ve uzun basılıp kopyalanabilen
+                // seçilebilir bir metin olarak gösteriliyor.
+                if (_pairingCode != null) ...[
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SelectableText(
+                          _pairingCode!,
+                          style: const TextStyle(
+                              fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.copy),
+                        tooltip: 'Kopyala',
+                        onPressed: _copyPairingCode,
+                      ),
+                    ],
                   ),
+                  const SizedBox(height: 4),
+                  Text(
+                    '5 dakika içinde girilmezse ya da bir kez kullanılınca bu kod geçersiz '
+                    'olur - yeni bir kod için tekrar oluşturun.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
               ],
             ),
           ),
