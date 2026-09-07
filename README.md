@@ -25,6 +25,44 @@ projelerde çok yaygındır. Devam etmek için:
 `zil_takip/` klasöründeki kodu inceleyip kendiniz de derleyebilirsiniz;
 bkz. aşağıdaki "Kendi bilgisayarınızda elle derlemek" bölümü.)
 
+### 📱 Android sürümü
+
+Aynı programın Android (telefon/tablet) karşılığı `zil_takip_android/`
+klasöründedir, Flutter ile yazılmıştır ve Windows sürümüyle aynı
+özellikleri sunar (Zil Programı, Namaz Vakitleri + Cuma Namazı, Genel
+Ayarlar). **Asgari Android 6.0 (API 23)** gerektirir - bu yüzden derleme
+bilinçli olarak Flutter 3.32.8'e sabitlenmiştir (bkz.
+`.github/workflows/build-android-apk.yml`), çünkü Flutter 3.35 ve
+sonrası artık Android 7.0'ın (API 24) altını desteklemiyor. Flutter
+sürümü ileride yükseltilirse hedef cihazın Android sürümü tekrar
+kontrol edilmelidir. Ekran kapalıyken/uygulama arka plandayken de çalışabilmesi için
+kalıcı bir bildirimle "ön plan servisi" olarak çalışır - bu yüzden
+bildirim çubuğunda sürekli bir "Ceselsan Zil Takip arka planda çalışıyor"
+bildirimi görünür, bu normaldir ve kapatılmamalıdır (kapatılırsa Android
+servisi durdurabilir).
+
+**👉 [Releases sayfasından en güncel `android-v*` etiketli sürümü indirin](https://github.com/Canerakcy/Zil-Takip-Programi/releases)**
+(`.apk` dosyasını telefona indirip açtığınızda "bilinmeyen kaynaklardan
+yükleme"ye izin vermeniz istenebilir - Play Store dışından kurulum
+yaptığınız için bu normaldir.)
+
+**AUX/kulaklık jakı ile hoparlöre bağlama:** Ekstra bir ayar gerekmez -
+telefonu kabloyla (jack/aux) bir hoparlöre bağladığınızda Android sesi
+otomatik olarak oraya yönlendirir, uygulama içinde ayrıca "çıkış cihazı
+seç" diye bir şeye gerek yoktur (Windows sürümündeki hoparlör seçiminin
+Android karşılığı işletim sistemi tarafından otomatik yapılır).
+
+**Arka planda kesintisiz çalışması için:** Uygulama ilk açıldığında sizden
+"pil optimizasyonundan muaf tut" izni ister - **mutlaka izin verin**,
+aksi halde bazı telefonlar (özellikle Samsung) bir süre sonra arka plan
+servisini durdurup zilleri kesebilir. İzni kaçırdıysanız **Genel**
+sekmesinden "Pil Optimizasyonundan Muaf Tut" satırındaki **Aç**
+butonuyla tekrar açabilirsiniz. Bazı Samsung telefonlarda ayrıca
+**Ayarlar > Pil > Arka Plan Kullanımı Sınırları > Uyku Modundaki
+Uygulamalar** listesinde Ceselsan Zil Takip varsa oradan çıkarmanız
+gerekebilir - üretici bu listeyi uygulama içinden kontrol edilemeyen,
+ayrı bir kısıtlama olarak tutar.
+
 ## Ekran Görüntüleri
 
 | Zil Programı | Cuma Namazı |
