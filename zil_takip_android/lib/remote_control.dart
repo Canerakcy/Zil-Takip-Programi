@@ -31,6 +31,9 @@ const int pairingCodeTtlSeconds = 300; // üretilen kod, kimse girmeden 5 dakika
 const int discoveryTimeoutSeconds = 20; // kod ile bağlanmaya çalışırken (karşı taraf bulunana kadar) beklenecek azami süre
 const int approvalTimeoutSeconds = 30; // karşı cihazda onay diyaloğu bu süre içinde yanıtlanmazsa otomatik reddedilir
 const int locateTimeoutSeconds = 5;
+const int configExportCodeTtlSeconds = 300; // ayar aktarım kodu, kimse girmeden 5 dakika sonra geçersiz olur
+const int configExportGrantTtlSeconds = 30; // UDP eşleşmesinden sonra TCP ile bağlanmak için azami süre
+const int configExportDiscoveryTimeoutSeconds = 20; // kod ile ayar isterken azami bekleme süresi
 
 final Random _random = Random.secure();
 
@@ -170,6 +173,21 @@ class RemoteControlService {
   String? _activeCode;
   DateTime? _activeCodeExpiresAt;
 
+  // Ayarları dışa aktarma kodu, eşleştirme kodundan tamamen ayrı bir
+  // durumdur - eşleştirme kalıcı bir "uzaktan müdahale" ilişkisi kurarken,
+  // bu sadece TEK SEFERLİK bir ayar kopyası gönderir, hiçbir token/kalıcı
+  // kayıt oluşturmaz. Paylaşılacak config, kod üretilirken (generateExportCode)
+  // anlık olarak "dondurulur".
+  String? _activeExportCode;
+  DateTime? _activeExportCodeExpiresAt;
+  Map<String, dynamic>? _activeExportConfig;
+  // UDP üzerinden kodu doğrulayıp "eşleşti" dedikten sonra, gerçek (büyük
+  // olabilecek) ayar verisini güvenilir şekilde taşımak için karşı taraf
+  // TCP ile bağlanır - bu harita UDP eşleşmesi ile TCP bağlantısı
+  // arasındaki kısa pencerede kodun hâlâ geçerli olduğunu ve hangi config
+  // anlık görüntüsüyle eşleştiğini izler.
+  final Map<String, ({DateTime expiresAt, Map<String, dynamic> config})> _pendingExportGrants = {};
+
   RemoteControlService({
     required this.getConfig,
     required this.applyRemoteConfig,
@@ -219,6 +237,33 @@ class RemoteControlService {
       return _activeCode;
     }
     _activeCode = null;
+    return null;
+  }
+
+  // ---------- Host tarafı: ayar dışa aktarma kodu üretme ----------
+  /// [config]'in bir anlık görüntüsünü, üretilen kodu bilen ilk cihaza
+  /// (tek seferlik) gönderilmek üzere "dondurur".
+  String generateExportCode(Map<String, dynamic> config) {
+    _activeExportCode = generatePairingCode();
+    _activeExportCodeExpiresAt =
+        DateTime.now().add(const Duration(seconds: configExportCodeTtlSeconds));
+    _activeExportConfig = config;
+    return _activeExportCode!;
+  }
+
+  void cancelExportCode() {
+    _activeExportCode = null;
+    _activeExportConfig = null;
+  }
+
+  String? get _currentExportCode {
+    if (_activeExportCode != null &&
+        _activeExportCodeExpiresAt != null &&
+        DateTime.now().isBefore(_activeExportCodeExpiresAt!)) {
+      return _activeExportCode;
+    }
+    _activeExportCode = null;
+    _activeExportConfig = null;
     return null;
   }
 
@@ -300,6 +345,31 @@ class RemoteControlService {
           'host_name': deviceName,
         }, addr, port);
       }
+    } else if (type == 'config_export_request') {
+      final code = _currentExportCode;
+      if (code == null || msg['code'] != code) return; // bizim kodumuz değil
+      final requesterName = (msg['name'] as String?) ?? 'Bilinmeyen Cihaz';
+      // Eşleştirme kodunda olduğu gibi, eşleşen İLK istekte kod hemen
+      // geçersiz kılınır (tekrar kullanılamaz) - ama gerçek ayar verisini
+      // (büyük olabileceğinden) güvenilir TCP üzerinden taşımak için, kısa
+      // bir süre "bu kod bu TCP bağlantısı için geçerli" izni (kod
+      // üretilirken dondurulan config anlık görüntüsüyle birlikte) bırakılır.
+      _activeExportCode = null;
+      final configSnapshot = _activeExportConfig;
+      _activeExportConfig = null;
+      if (configSnapshot != null) {
+        _pendingExportGrants[code] = (
+          expiresAt: DateTime.now().add(const Duration(seconds: configExportGrantTtlSeconds)),
+          config: configSnapshot,
+        );
+      }
+      _sendUdpTo({
+        'v': protocolVersion,
+        'type': 'config_export_ack',
+        'control_port': controlTcpPort,
+        'host_name': deviceName,
+      }, addr, port);
+      onLog("'$requesterName' bu cihazın ayarlarını dışa aktarma koduyla istedi.");
     }
   }
 
@@ -387,6 +457,111 @@ class RemoteControlService {
     timeoutTimer = Timer(const Duration(seconds: discoveryTimeoutSeconds), () {
       if (!gotAck) {
         onStatus('Zaman aşımı - kod bulunamadı ya da süresi doldu.');
+        finish(null);
+      }
+    });
+
+    return completer.future;
+  }
+
+  /// Girilen kodu yerel ağa yayınlar; karşı cihaz kodu tanırsa TÜM
+  /// ayarlarını (kalıcı bir eşleştirme oluşturmadan, tek seferlik) geri
+  /// gönderir. Başarılıysa (hostName, config) döner, aksi halde null.
+  ///
+  /// Eşleştirmedeki iki aşamalı desenin aynısı: önce UDP ile kodun eşleştiği
+  /// doğrulanır (küçük, kayıp paketlere karşı tekrar gönderilen mesajlar),
+  /// sonra gerçek (büyük olabilecek) ayar verisi güvenilir TCP üzerinden
+  /// alınır.
+  Future<(String, Map<String, dynamic>)?> requestConfigExport(
+      String code, void Function(String status) onStatus) async {
+    final sock = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0, reuseAddress: true);
+    sock.broadcastEnabled = true;
+
+    final request = {
+      'v': protocolVersion,
+      'type': 'config_export_request',
+      'code': code,
+      'name': deviceName,
+    };
+    void broadcast() {
+      final data = utf8.encode('${jsonEncode(request)}\n');
+      sock.send(data, InternetAddress('255.255.255.255'), pairingUdpPort);
+    }
+
+    final completer = Completer<(String, Map<String, dynamic>)?>();
+    var handled = false;
+    Timer? rebroadcastTimer;
+    Timer? timeoutTimer;
+    late final StreamSubscription<RawSocketEvent> sub;
+
+    void finish((String, Map<String, dynamic>)? result) {
+      rebroadcastTimer?.cancel();
+      timeoutTimer?.cancel();
+      sub.cancel();
+      sock.close();
+      if (!completer.isCompleted) completer.complete(result);
+    }
+
+    sub = sock.listen((event) {
+      if (event != RawSocketEvent.read) return;
+      final datagram = sock.receive();
+      if (datagram == null) return;
+      Map<String, dynamic> msg;
+      try {
+        msg = jsonDecode(utf8.decode(datagram.data)) as Map<String, dynamic>;
+      } catch (_) {
+        return;
+      }
+      if (msg['type'] != 'config_export_ack' || handled) return;
+      handled = true;
+      onStatus('Kod bulundu, ayarlar alınıyor...');
+      final ip = datagram.address.address;
+      final controlPort = (msg['control_port'] as num?)?.toInt() ?? controlTcpPort;
+
+      () async {
+        try {
+          final tcpSocket = await Socket.connect(ip, controlPort,
+              timeout: const Duration(seconds: 10));
+          final reader = _LineReader(tcpSocket);
+          try {
+            tcpSocket.add(utf8
+                .encode('${jsonEncode({'type': 'export_config', 'code': code})}\n'));
+            await tcpSocket.flush();
+            final line = await reader.readLine(const Duration(seconds: 10));
+            final result = jsonDecode(line) as Map<String, dynamic>;
+            if (result['ok'] != true) {
+              onStatus('Ayarlar alınamadı: ${result['error'] ?? 'bilinmeyen hata'}');
+              finish(null);
+              return;
+            }
+            final config = result['config'];
+            if (config is! Map<String, dynamic>) {
+              onStatus('Geçersiz yanıt alındı.');
+              finish(null);
+              return;
+            }
+            final hostName = (result['host_name'] as String?) ?? 'Bilinmeyen Cihaz';
+            onStatus("'$hostName' cihazından ayarlar alındı.");
+            finish((hostName, config));
+          } finally {
+            await reader.close();
+            await tcpSocket.close();
+          }
+        } catch (exc) {
+          onStatus('Ayarlar alınamadı: $exc');
+          finish(null);
+        }
+      }();
+    });
+
+    broadcast();
+    onStatus('Aranıyor...');
+    rebroadcastTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      if (!handled) broadcast();
+    });
+    timeoutTimer = Timer(const Duration(seconds: configExportDiscoveryTimeoutSeconds), () {
+      if (!handled) {
+        onStatus('Zaman aşımı - kod bulunamadı.');
         finish(null);
       }
     });
@@ -502,6 +677,10 @@ class RemoteControlService {
       try {
         final authLine = await reader.readLine(const Duration(seconds: 30));
         final authMsg = jsonDecode(authLine) as Map<String, dynamic>;
+        if (authMsg['type'] == 'export_config') {
+          await _handleExportConfigTcp(socket, authMsg);
+          return;
+        }
         if (authMsg['type'] != 'auth') return;
         final token = authMsg['token'];
         final matches = pairedDevices.where((p) => p.token == token).toList();
@@ -527,6 +706,25 @@ class RemoteControlService {
         await socket.close();
       }
     }();
+  }
+
+  /// UDP aşamasında kodu doğrulayıp geçici bir izin bırakmıştık (bkz.
+  /// _handleUdpMessage'daki 'config_export_request') - burada o izni
+  /// tüketip gerçek ayar verisini gönderiyoruz. Kalıcı bir token/eşleşme
+  /// oluşturulmaz; bu tamamen tek seferlik bir işlemdir.
+  Future<void> _handleExportConfigTcp(Socket socket, Map<String, dynamic> msg) async {
+    final code = msg['code'] as String?;
+    final grant = code != null ? _pendingExportGrants.remove(code) : null;
+    if (grant == null || DateTime.now().isAfter(grant.expiresAt)) {
+      socket.add(utf8
+          .encode('${jsonEncode({'ok': false, 'error': 'Kod geçersiz ya da süresi dolmuş.'})}\n'));
+      await socket.flush();
+      return;
+    }
+    socket.add(utf8.encode(
+        '${jsonEncode({'ok': true, 'config': grant.config, 'host_name': deviceName})}\n'));
+    await socket.flush();
+    onLog('Ayarlar dışa aktarma koduyla başka bir cihaza gönderildi.');
   }
 
   Future<Map<String, dynamic>> _executeCommand(

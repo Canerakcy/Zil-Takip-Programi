@@ -1,7 +1,6 @@
 """Ceselsan Zil Takip Programı - Ana pencere (Tkinter arayüzü)."""
 from __future__ import annotations
 
-import json
 import os
 import queue
 import subprocess
@@ -425,6 +424,119 @@ class PairingApprovalDialog(tk.Toplevel):
         self.destroy()
 
 
+class ExportCodeDialog(tk.Toplevel):
+    """Ayarları dışa aktarmak için bir kod üretip gösteren pencere - tıpkı
+    "Uzaktan Erişim" sekmesindeki eşleştirme koduna benziyor, ama kalıcı bir
+    ilişki kurmaz: yalnızca kodu bilen İLK cihaza, üretim anındaki ayarların
+    TEK SEFERLİK bir kopyasını gönderir."""
+
+    def __init__(self, parent, manager: "remote_control.RemoteControlManager",
+                 config: dict) -> None:
+        super().__init__(parent)
+        self.title("Ayarları Dışa Aktar")
+        self.configure(bg=BG)
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+        self.manager = manager
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        code = manager.generate_export_code(config)
+
+        ttk.Label(
+            self, justify="left", wraplength=380,
+            text='Bu kodu, ayarları almak istediğiniz cihazda "Kod ile İçe Aktar" ekranına '
+                 "girin. Yalnızca aynı yerel ağda (WiFi) çalışır.").pack(
+            padx=20, pady=(20, 10))
+
+        code_row = ttk.Frame(self)
+        code_row.pack(padx=20, pady=(0, 4))
+        self.code_var = tk.StringVar(value=code)
+        ttk.Entry(code_row, textvariable=self.code_var, font=("Consolas", 20, "bold"),
+                  width=22, justify="left", state="readonly").pack(side="left")
+        ttk.Button(code_row, text="📋 Kopyala", command=self._copy_code).pack(
+            side="left", padx=(8, 0))
+
+        ttk.Label(self, text="5 dakika içinde girilmezse ya da bir kez kullanılınca bu kod "
+                              "geçersiz olur.", foreground="#666666").pack(
+            padx=20, pady=(0, 16))
+
+        ttk.Button(self, text="Kapat", command=self._on_close).pack(pady=(0, 16))
+
+    def _copy_code(self) -> None:
+        self.clipboard_clear()
+        self.clipboard_append(self.code_var.get())
+
+    def _on_close(self) -> None:
+        self.manager.cancel_export_code()
+        self.destroy()
+
+
+class ImportCodeDialog(tk.Toplevel):
+    """Bir cihazda gösterilen dışa aktarma kodunu girip o cihazın ayarlarını
+    almak için kullanılan pencere. Başarılıysa self.result = (host_name,
+    config) olur, aksi halde None kalır (İptal/kapatma/zaman aşımı)."""
+
+    def __init__(self, parent, manager: "remote_control.RemoteControlManager") -> None:
+        super().__init__(parent)
+        self.title("Kod ile İçe Aktar")
+        self.configure(bg=BG)
+        self.resizable(False, False)
+        self.transient(parent)
+        self.grab_set()
+        self.manager = manager
+        self.result: Optional[tuple[str, dict]] = None
+        self._busy = False
+        self.protocol("WM_DELETE_WINDOW", self.destroy)
+
+        ttk.Label(
+            self, justify="left", wraplength=360,
+            text='Ayarlarını almak istediğiniz cihazda "Dışa Aktar" ile üretilen kodu buraya '
+                 "girin.").pack(padx=20, pady=(20, 10))
+
+        row = ttk.Frame(self)
+        row.pack(padx=20, pady=(0, 4))
+        self.code_entry_var = tk.StringVar()
+        ttk.Entry(row, textvariable=self.code_entry_var, width=24).pack(side="left")
+        self.submit_btn = ttk.Button(row, text="İçe Aktar", style="Accent.TButton",
+                                      command=self._on_submit)
+        self.submit_btn.pack(side="left", padx=(8, 0))
+
+        self.status_var = tk.StringVar(value="")
+        ttk.Label(self, textvariable=self.status_var, foreground="#666666",
+                  wraplength=360, justify="left").pack(padx=20, pady=(4, 16))
+
+    def _on_submit(self) -> None:
+        code = self.code_entry_var.get().strip()
+        if not code or self._busy:
+            return
+        self._busy = True
+        self.submit_btn.state(["disabled"])
+        self.status_var.set("Aranıyor...")
+
+        def worker() -> None:
+            def status(text: str) -> None:
+                try:
+                    self.after(0, lambda: self.status_var.set(text))
+                except RuntimeError:
+                    pass
+            result = self.manager.request_config_export(code, status)
+            try:
+                self.after(0, lambda: self._finish(result))
+            except RuntimeError:
+                pass
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _finish(self, result: Optional[tuple[str, dict]]) -> None:
+        self._busy = False
+        self.submit_btn.state(["!disabled"])
+        if result is None:
+            return
+        self.result = result
+        self.destroy()
+
+
 class ConfigTabsMixin:
     """Zil Programı/Namaz Vakitleri/tatil günleri/varsayılan ses sekmelerini
     kuran ve düzenleyen ortak metodlar. Hem App (yerel ayarlar) hem de
@@ -828,49 +940,29 @@ class ConfigTabsMixin:
         self.cfg["fire_button_sound"] = None
         self._persist()
 
-    # ---------- Ayarları dışa/içe aktarma (yedekleme/geri yükleme) ----------
+    # ---------- Ayarları dışa/içe aktarma (kod ile, eşleştirme gibi) ----------
     def _export_config(self) -> None:
-        path = filedialog.asksaveasfilename(
-            title="Ayarları Dışa Aktar", defaultextension=".json",
-            filetypes=[("JSON dosyası", "*.json"), ("Tüm dosyalar", "*.*")])
-        if not path:
-            return
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(self.cfg, f, ensure_ascii=False, indent=2)
-        except OSError as exc:
-            messagebox.showerror(APP_TITLE, f"Dışa aktarılamadı: {exc}")
-            return
-        self._log(f"Ayarlar dışa aktarıldı: {path}")
-        messagebox.showinfo(APP_TITLE, "Ayarlar başarıyla dışa aktarıldı.")
+        ExportCodeDialog(self, self.remote_control, self.cfg)
 
     def _import_config(self) -> None:
-        path = filedialog.askopenfilename(
-            title="Ayarları İçe Aktar",
-            filetypes=[("JSON dosyası", "*.json"), ("Tüm dosyalar", "*.*")])
-        if not path:
+        dialog = ImportCodeDialog(self, self.remote_control)
+        self.wait_window(dialog)
+        if dialog.result is None:
             return
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except (OSError, ValueError) as exc:
-            messagebox.showerror(APP_TITLE, f"Dosya okunamadı ya da geçersiz: {exc}")
-            return
-        if not isinstance(data, dict):
-            messagebox.showerror(APP_TITLE, "Geçersiz ayar dosyası.")
-            return
+        host_name, config = dialog.result
         if not messagebox.askyesno(
                 APP_TITLE,
-                "Bu, mevcut TÜM ayarların (zil kayıtları, namaz vakitleri, tatil "
-                "günleri, sesler) üzerine yazacak. Devam edilsin mi?"):
+                f"'{host_name}' cihazından alınan ayarlar, mevcut TÜM ayarların (zil "
+                "kayıtları, namaz vakitleri, tatil günleri, sesler) üzerine yazacak. "
+                "Devam edilsin mi?"):
             return
-        # complete_config(), içe aktarılan dosya eksik/elle düzenlenmiş olsa
+        # complete_config(), içe aktarılan veri eksik/elle düzenlenmiş olsa
         # bile (ör. eski bir sürümden) her alanın var olduğunu garanti eder -
         # aksi halde sekmeler yeniden kurulurken KeyError ile çöker.
-        self.cfg = complete_config(data)
+        self.cfg = complete_config(config)
         self._persist()
         self._rebuild_all_tabs()
-        self._log(f"Ayarlar içe aktarıldı: {path}")
+        self._log(f"Ayarlar '{host_name}' cihazından içe aktarıldı.")
 
     # ---------- Genel sekmesi: tatil günleri ----------
     def _refresh_holidays_tree(self) -> None:
@@ -945,6 +1037,12 @@ class RemoteSettingsWindow(tk.Toplevel, ConfigTabsMixin):
         self.transient(parent)
         self.peer = peer
         self.manager = manager
+        # ConfigTabsMixin'in bazı ortak metodları (ör. _export_config/
+        # _import_config, kod tabanlı ayar aktarımı için) App ile
+        # RemoteSettingsWindow arasında ortak bir isimle "remote_control"
+        # yöneticisine erişmek ister - burada App'teki gibi aynı isimle
+        # (manager'a) bir takma ad tanımlanıyor.
+        self.remote_control = manager
         self.on_log = on_log
         self.cfg = config_data
 
@@ -1026,14 +1124,15 @@ class RemoteSettingsWindow(tk.Toplevel, ConfigTabsMixin):
             foreground="#666666", wraplength=820, justify="left").pack(
             anchor="w", padx=10, pady=(12, 8))
 
-        backup_frame = ttk.LabelFrame(frame, text="Ayarları Yedekle / Geri Yükle")
+        backup_frame = ttk.LabelFrame(frame, text="Ayarları Kod ile Aktar")
         backup_frame.pack(fill="x", padx=10, pady=(0, 8))
         backup_btn_frame = ttk.Frame(backup_frame)
         backup_btn_frame.pack(fill="x", padx=8, pady=8)
-        ttk.Button(backup_btn_frame, text="📤 Dışa Aktar (bu cihazın ayarlarını kaydet)",
+        ttk.Button(backup_btn_frame,
+                   text=f"🔑 Kod Oluştur ('{self.peer.name}' ayarlarını paylaş)",
                    command=self._export_config).pack(side="left", padx=4)
         ttk.Button(backup_btn_frame,
-                   text=f"📥 İçe Aktar ('{self.peer.name}' cihazına gönder)",
+                   text=f"📥 Kod ile İçe Aktar ('{self.peer.name}' cihazına gönder)",
                    command=self._import_config).pack(side="left", padx=4)
 
         holidays_frame = ttk.LabelFrame(
@@ -1620,46 +1719,26 @@ class App(tk.Tk):
         self.cfg["fire_button_sound"] = None
         self._persist()
 
-    # ---------- Ayarları dışa/içe aktarma (yedekleme/geri yükleme) ----------
+    # ---------- Ayarları dışa/içe aktarma (kod ile, eşleştirme gibi) ----------
     def _export_config(self) -> None:
-        path = filedialog.asksaveasfilename(
-            title="Ayarları Dışa Aktar", defaultextension=".json",
-            filetypes=[("JSON dosyası", "*.json"), ("Tüm dosyalar", "*.*")])
-        if not path:
-            return
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                json.dump(self.cfg, f, ensure_ascii=False, indent=2)
-        except OSError as exc:
-            messagebox.showerror(APP_TITLE, f"Dışa aktarılamadı: {exc}")
-            return
-        self._log(f"Ayarlar dışa aktarıldı: {path}")
-        messagebox.showinfo(APP_TITLE, "Ayarlar başarıyla dışa aktarıldı.")
+        ExportCodeDialog(self, self.remote_control, self.cfg)
 
     def _import_config(self) -> None:
-        path = filedialog.askopenfilename(
-            title="Ayarları İçe Aktar",
-            filetypes=[("JSON dosyası", "*.json"), ("Tüm dosyalar", "*.*")])
-        if not path:
+        dialog = ImportCodeDialog(self, self.remote_control)
+        self.wait_window(dialog)
+        if dialog.result is None:
             return
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except (OSError, ValueError) as exc:
-            messagebox.showerror(APP_TITLE, f"Dosya okunamadı ya da geçersiz: {exc}")
-            return
-        if not isinstance(data, dict):
-            messagebox.showerror(APP_TITLE, "Geçersiz ayar dosyası.")
-            return
+        host_name, config = dialog.result
         if not messagebox.askyesno(
                 APP_TITLE,
-                "Bu, mevcut TÜM ayarların (zil kayıtları, namaz vakitleri, tatil "
-                "günleri, sesler) üzerine yazacak. Devam edilsin mi?"):
+                f"'{host_name}' cihazından alınan ayarlar, mevcut TÜM ayarların (zil "
+                "kayıtları, namaz vakitleri, tatil günleri, sesler) üzerine yazacak. "
+                "Devam edilsin mi?"):
             return
-        self.cfg = complete_config(data)
+        self.cfg = complete_config(config)
         self._persist()
         self._rebuild_all_tabs()
-        self._log(f"Ayarlar içe aktarıldı: {path}")
+        self._log(f"Ayarlar '{host_name}' cihazından içe aktarıldı.")
 
     def _build_general_tab(self) -> None:
         frame = self.general_tab
@@ -1703,14 +1782,14 @@ class App(tk.Tk):
         ttk.Button(log_row, text="📁 Log Klasörünü Aç", command=self._open_log_folder).pack(
             side="left", padx=8)
 
-        backup_frame = ttk.LabelFrame(frame, text="Ayarları Yedekle / Geri Yükle")
+        backup_frame = ttk.LabelFrame(frame, text="Ayarları Kod ile Aktar")
         backup_frame.pack(fill="x", padx=10, pady=(0, 8))
         backup_btn_frame = ttk.Frame(backup_frame)
         backup_btn_frame.pack(fill="x", padx=8, pady=8)
-        ttk.Button(backup_btn_frame, text="📤 Dışa Aktar", command=self._export_config).pack(
-            side="left", padx=4)
-        ttk.Button(backup_btn_frame, text="📥 İçe Aktar", command=self._import_config).pack(
-            side="left", padx=4)
+        ttk.Button(backup_btn_frame, text="🔑 Kod Oluştur (Dışa Aktar)",
+                   command=self._export_config).pack(side="left", padx=4)
+        ttk.Button(backup_btn_frame, text="📥 Kod ile İçe Aktar",
+                   command=self._import_config).pack(side="left", padx=4)
 
         holidays_frame = ttk.LabelFrame(
             frame, text="Tatil Günleri (normal program bu tarihlerde çalmaz)")

@@ -287,6 +287,33 @@ Future<void> _setUpRemoteControl(
     remoteControl.cancelCode();
   });
 
+  // Ayarları kod ile dışa/içe aktarma - eşleştirme koduyla AYNI mekanizma,
+  // ama kalıcı bir ilişki kurmaz: yalnızca üretim anındaki ayarların TEK
+  // SEFERLİK bir kopyasını, kodu bilen ilk cihaza gönderir.
+  service.on('generate_export_code').listen((event) {
+    final configRaw = event?['config'];
+    if (configRaw is! Map) return;
+    final code = remoteControl.generateExportCode(Map<String, dynamic>.from(configRaw));
+    service.invoke('export_code', {'code': code});
+  });
+
+  service.on('cancel_export_code').listen((event) {
+    remoteControl.cancelExportCode();
+  });
+
+  service.on('request_config_export').listen((event) async {
+    final code = event?['code'] as String?;
+    if (code == null || code.isEmpty) return;
+    final result = await remoteControl.requestConfigExport(code, (status) {
+      service.invoke('import_config_status', {'status': status});
+    });
+    service.invoke('import_config_result', {
+      'success': result != null,
+      'host_name': result?.$1,
+      'config': result?.$2,
+    });
+  });
+
   service.on('connect_with_code').listen((event) async {
     final code = event?['code'] as String?;
     if (code == null || code.isEmpty) return;

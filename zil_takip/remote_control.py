@@ -37,6 +37,9 @@ PAIRING_CODE_TTL_SECONDS = 300  # üretilen kod, kimse girmeden 5 dakika sonra g
 DISCOVERY_TIMEOUT_SECONDS = 20  # kod ile bağlanmaya çalışırken (karşı taraf bulunana kadar) beklenecek azami süre
 APPROVAL_TIMEOUT_SECONDS = 30  # karşı cihazda onay diyaloğu bu süre içinde yanıtlanmazsa otomatik reddedilir
 LOCATE_TIMEOUT_SECONDS = 5
+CONFIG_EXPORT_CODE_TTL_SECONDS = 300  # ayar aktarım kodu, kimse girmeden 5 dakika sonra geçersiz olur
+CONFIG_EXPORT_GRANT_TTL_SECONDS = 30  # UDP eşleşmesinden sonra TCP ile bağlanmak için azami süre
+CONFIG_EXPORT_DISCOVERY_TIMEOUT_SECONDS = 20  # kod ile ayar isterken azami bekleme süresi
 
 
 def generate_pairing_code() -> str:
@@ -142,6 +145,23 @@ class RemoteControlManager:
 
         self._active_code: Optional[str] = None
         self._active_code_expires_at: float = 0.0
+        # Ayarları dışa aktarma kodu, eşleştirme kodundan tamamen ayrı bir
+        # durumdur - eşleştirme kalıcı bir "uzaktan müdahale" ilişkisi
+        # kurarken, bu sadece TEK SEFERLİK bir ayar kopyası gönderir, hiçbir
+        # token/kalıcı kayıt oluşturmaz. Paylaşılacak config, kod üretilirken
+        # (generate_export_code) anlık olarak "dondurulur" - böylece kod
+        # kullanılana kadar geçen sürede yapılan değişiklikler paylaşılan
+        # kopyayı etkilemez.
+        self._active_export_code: Optional[str] = None
+        self._active_export_code_expires_at: float = 0.0
+        self._active_export_config: Optional[dict[str, Any]] = None
+        # UDP üzerinden kodu doğrulayıp "eşleşti" dedikten sonra, gerçek
+        # (büyük olabilecek) ayar verisini güvenilir şekilde taşımak için
+        # karşı taraf TCP ile bağlanır - bu sözlük UDP eşleşmesi ile TCP
+        # bağlantısı arasındaki kısa pencerede kodun hâlâ geçerli olduğunu ve
+        # hangi config anlık görüntüsüyle eşleştiğini izler
+        # (kod -> (son geçerlilik zamanı, config)).
+        self._pending_export_grants: dict[str, tuple[float, dict[str, Any]]] = {}
         self._lock = threading.Lock()
 
     # ---------- Yaşam döngüsü ----------
@@ -184,6 +204,30 @@ class RemoteControlManager:
             if self._active_code and time.time() < self._active_code_expires_at:
                 return self._active_code
             self._active_code = None
+            return None
+
+    # ---------- Host tarafı: ayar dışa aktarma kodu üretme ----------
+    def generate_export_code(self, config: dict[str, Any]) -> str:
+        """[config]'in bir anlık görüntüsünü, üretilen kodu bilen ilk cihaza
+        (tek seferlik) gönderilmek üzere "dondurur"."""
+        with self._lock:
+            self._active_export_code = generate_pairing_code()
+            self._active_export_code_expires_at = time.time() + CONFIG_EXPORT_CODE_TTL_SECONDS
+            self._active_export_config = config
+            return self._active_export_code
+
+    def cancel_export_code(self) -> None:
+        with self._lock:
+            self._active_export_code = None
+            self._active_export_config = None
+
+    def _current_export_code(self) -> Optional[str]:
+        with self._lock:
+            if (self._active_export_code
+                    and time.time() < self._active_export_code_expires_at):
+                return self._active_export_code
+            self._active_export_code = None
+            self._active_export_config = None
             return None
 
     # ---------- UDP dinleme (keşif + eşleştirme) ----------
@@ -264,6 +308,30 @@ class RemoteControlManager:
                     "control_port": CONTROL_TCP_PORT, "host_name": self.device_name,
                 }, addr)
 
+        elif msg_type == "config_export_request":
+            code = self._current_export_code()
+            if not code or msg.get("code") != code:
+                return  # bu bizim kodumuz değil - sessizce yok say
+            requester_name = str(msg.get("name") or "Bilinmeyen Cihaz")
+            # Eşleştirme kodunda olduğu gibi, eşleşen İLK istekte kod hemen
+            # geçersiz kılınır (tekrar kullanılamaz) - ama gerçek ayar
+            # verisini (büyük olabileceğinden) güvenilir TCP üzerinden
+            # taşımak için, kısa bir süre "bu kod bu TCP bağlantısı için
+            # geçerli" izni (kod üretilirken dondurulan config anlık
+            # görüntüsüyle birlikte) bırakılır.
+            with self._lock:
+                self._active_export_code = None
+                config_snapshot = self._active_export_config
+                self._active_export_config = None
+                if config_snapshot is not None:
+                    self._pending_export_grants[code] = (
+                        time.time() + CONFIG_EXPORT_GRANT_TTL_SECONDS, config_snapshot)
+            _send_udp_to(self._udp_sock, {
+                "v": PROTOCOL_VERSION, "type": "config_export_ack",
+                "control_port": CONTROL_TCP_PORT, "host_name": self.device_name,
+            }, addr)
+            self._on_log(f"'{requester_name}' bu cihazın ayarlarını dışa aktarma koduyla istedi.")
+
     # ---------- Client tarafı: koda göre eşleştirme isteği gönder ----------
     def pair_with_code(self, code: str, on_status: Callable[[str], None]) -> Optional[PairedDevice]:
         """Girilen kodu yerel ağa yayınlar, karşı taraf onaylarsa eşleşmiş
@@ -317,6 +385,70 @@ class RemoteControlManager:
                     on_status(f"'{peer.name}' ile eşleşti.")
                     return peer
             on_status("Zaman aşımı - kod bulunamadı ya da onaylanmadı.")
+            return None
+        finally:
+            sock.close()
+
+    # ---------- Client tarafı: koda göre ayar dışa aktarma isteği ----------
+    def request_config_export(self, code: str, on_status: Callable[[str], None]
+                               ) -> Optional[tuple[str, dict[str, Any]]]:
+        """Girilen kodu yerel ağa yayınlar; karşı cihaz kodu tanırsa TÜM
+        ayarlarını (kalıcı bir eşleştirme oluşturmadan, tek seferlik) geri
+        gönderir. Başarılıysa (host_name, config) döner, aksi halde None.
+        Senkron/bloklayan bir çağrıdır - ayrı bir thread'den çağırın.
+
+        Eşleştirmedeki iki aşamalı desenin aynısı: önce UDP ile kodun
+        eşleştiği doğrulanır (küçük, kayıp paketlere karşı tekrar
+        gönderilen mesajlar), sonra gerçek (büyük olabilecek) ayar verisi
+        güvenilir TCP üzerinden alınır."""
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+        sock.bind(("", 0))
+        sock.settimeout(1.0)
+        try:
+            request = {"v": PROTOCOL_VERSION, "type": "config_export_request", "code": code,
+                       "name": self.device_name}
+            deadline = time.time() + CONFIG_EXPORT_DISCOVERY_TIMEOUT_SECONDS
+            _send_udp_broadcast(sock, request)
+            last_broadcast = time.time()
+            on_status("Aranıyor...")
+            while time.time() < deadline:
+                if time.time() - last_broadcast > 2.0:
+                    _send_udp_broadcast(sock, request)
+                    last_broadcast = time.time()
+                try:
+                    data, addr = sock.recvfrom(4096)
+                except socket.timeout:
+                    continue
+                try:
+                    msg = json.loads(data.decode("utf-8").strip())
+                except (ValueError, UnicodeDecodeError):
+                    continue
+                if msg.get("type") != "config_export_ack":
+                    continue
+                on_status("Kod bulundu, ayarlar alınıyor...")
+                ip = addr[0]
+                port = int(msg.get("control_port", CONTROL_TCP_PORT))
+                try:
+                    with socket.create_connection((ip, port), timeout=10) as tcp_sock:
+                        sock_file = tcp_sock.makefile("rwb")
+                        self._write_json(sock_file, {"type": "export_config", "code": code})
+                        result = self._read_json(sock_file, 10)
+                except OSError as exc:
+                    on_status(f"Ayarlar alınamadı: {exc}")
+                    return None
+                if not result.get("ok"):
+                    on_status(f"Ayarlar alınamadı: {result.get('error', 'bilinmeyen hata')}")
+                    return None
+                config = result.get("config")
+                if not isinstance(config, dict):
+                    on_status("Geçersiz yanıt alındı.")
+                    return None
+                host_name = str(result.get("host_name") or "Bilinmeyen Cihaz")
+                on_status(f"'{host_name}' cihazından ayarlar alındı.")
+                return host_name, config
+            on_status("Zaman aşımı - kod bulunamadı.")
             return None
         finally:
             sock.close()
@@ -419,6 +551,9 @@ class RemoteControlManager:
             conn.settimeout(30)
             sock_file = conn.makefile("rwb")
             auth_msg = self._read_json(sock_file, 30)
+            if auth_msg.get("type") == "export_config":
+                self._handle_export_config_tcp(sock_file, auth_msg)
+                return
             if auth_msg.get("type") != "auth":
                 return
             token = auth_msg.get("token")
@@ -439,6 +574,23 @@ class RemoteControlManager:
                 conn.close()
             except Exception:
                 pass
+
+    def _handle_export_config_tcp(self, sock_file, msg: dict[str, Any]) -> None:
+        """UDP aşamasında kodu doğrulayıp geçici bir izin bırakmıştık (bkz.
+        _handle_udp_message'daki 'config_export_request') - burada o izni
+        tüketip gerçek ayar verisini gönderiyoruz. Kalıcı bir token/eşleşme
+        oluşturulmaz; bu tamamen tek seferlik bir işlemdir."""
+        code = msg.get("code")
+        with self._lock:
+            grant = self._pending_export_grants.pop(code, None) if code else None
+        if not grant or time.time() > grant[0]:
+            self._write_json(sock_file, {"ok": False, "error": "Kod geçersiz ya da süresi dolmuş."})
+            return
+        _expires_at, config_snapshot = grant
+        self._write_json(sock_file, {
+            "ok": True, "config": config_snapshot, "host_name": self.device_name,
+        })
+        self._on_log("Ayarlar dışa aktarma koduyla başka bir cihaza gönderildi.")
 
     def _execute_command(self, msg: dict[str, Any], peer: PairedDevice) -> dict[str, Any]:
         cmd = msg.get("cmd")

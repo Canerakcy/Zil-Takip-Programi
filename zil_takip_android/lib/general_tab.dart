@@ -1,11 +1,11 @@
 // "Genel" sekmesi - varsayılan ses, ses seviyesi, telefon açılınca otomatik
 // başlatma, tatil günleri ve kayıt (log) görünümü. Windows sürümündeki
 // _build_general_tab()/_build_audio_tab()'ın karşılığı.
-import 'dart:convert';
-import 'dart:io';
+import 'dart:async';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import 'background_service.dart';
@@ -17,10 +17,10 @@ class GeneralTab extends StatefulWidget {
   final VoidCallback onChanged;
   final List<String> logLines;
 
-  /// Ayarları JSON dosyasına kaydetme (yedekleme) - widget.config'in
-  /// KENDİSİ (yerel modda bu telefonun, uzak modda eşleşmiş cihazın son
-  /// çekilen ayarları) dışa aktarılır, bu yüzden ayrı bir callback
-  /// gerekmez.
+  /// Ayarları bir kod üreterek dışa aktarma (Uzaktan Erişim sekmesindeki
+  /// eşleştirme koduyla aynı mekanizma) - widget.config'in KENDİSİ (yerel
+  /// modda bu telefonun, uzak modda eşleşmiş cihazın son çekilen ayarları)
+  /// paylaşılır, bu yüzden ayrı bir callback gerekmez.
   ///
   /// İçe aktarma ise TÜM ayarların yerini alan yepyeni bir AppConfig nesnesi
   /// üretir - widget.config'i mutasyona uğratmak yerine (StatefulWidget'lar
@@ -94,50 +94,28 @@ class _GeneralTabState extends State<GeneralTab> {
   }
 
   Future<void> _exportConfig() async {
-    final jsonStr = const JsonEncoder.withIndent('  ').convert(widget.config.toJson());
-    try {
-      final savedPath = await FilePicker.saveFile(
-        dialogTitle: 'Ayarları Dışa Aktar',
-        fileName: 'zil_takip_ayarlari.json',
-        type: FileType.custom,
-        allowedExtensions: ['json'],
-        bytes: utf8.encode(jsonStr),
-      );
-      if (!mounted || savedPath == null) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Ayarlar dışa aktarıldı.')));
-    } catch (exc) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Dışa aktarılamadı: $exc')));
-    }
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _ExportCodeDialog(config: widget.config.toJson()),
+    );
   }
 
   Future<void> _importConfig() async {
-    final result =
-        await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['json']);
-    final path = result?.files.single.path;
-    if (path == null) return;
-
-    Map<String, dynamic> data;
-    try {
-      final content = await File(path).readAsString();
-      data = jsonDecode(content) as Map<String, dynamic>;
-    } catch (exc) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Dosya okunamadı ya da geçersiz: $exc')));
-      return;
-    }
+    final result = await showDialog<(String, Map<String, dynamic>)>(
+      context: context,
+      builder: (_) => const _ImportCodeDialog(),
+    );
+    if (result == null) return;
+    final (hostName, configJson) = result;
 
     if (!mounted) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Ayarları İçe Aktar'),
-        content: const Text(
-            'Bu, mevcut TÜM ayarların (zil kayıtları, namaz vakitleri, tatil günleri, '
-            'sesler) üzerine yazacak. Devam edilsin mi?'),
+        content: Text(
+            "'$hostName' cihazından alınan ayarlar, mevcut TÜM ayarların (zil kayıtları, "
+            'namaz vakitleri, tatil günleri, sesler) üzerine yazacak. Devam edilsin mi?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('İçe Aktar')),
@@ -148,17 +126,17 @@ class _GeneralTabState extends State<GeneralTab> {
 
     AppConfig imported;
     try {
-      imported = AppConfig.fromJson(data);
+      imported = AppConfig.fromJson(configJson);
     } catch (exc) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Geçersiz ayar dosyası: $exc')));
+          .showSnackBar(SnackBar(content: Text('Geçersiz ayar verisi: $exc')));
       return;
     }
     await widget.onImportConfig(imported);
     if (!mounted) return;
     ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('Ayarlar içe aktarıldı.')));
+        .showSnackBar(SnackBar(content: Text("Ayarlar '$hostName' cihazından içe aktarıldı.")));
   }
 
   Future<void> _addHoliday() async {
@@ -306,7 +284,7 @@ class _GeneralTabState extends State<GeneralTab> {
           ),
         ],
         const SizedBox(height: 24),
-        Text('Ayarları Yedekle / Geri Yükle', style: Theme.of(context).textTheme.titleMedium),
+        Text('Ayarları Kod ile Aktar', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
         Card(
           child: Padding(
@@ -316,8 +294,8 @@ class _GeneralTabState extends State<GeneralTab> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: _exportConfig,
-                    icon: const Icon(Icons.upload_file),
-                    label: const Text('Dışa Aktar'),
+                    icon: const Icon(Icons.vpn_key),
+                    label: const Text('Kod Oluştur'),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -325,7 +303,7 @@ class _GeneralTabState extends State<GeneralTab> {
                   child: OutlinedButton.icon(
                     onPressed: _importConfig,
                     icon: const Icon(Icons.download_outlined),
-                    label: const Text('İçe Aktar'),
+                    label: const Text('Kod ile İçe Aktar'),
                   ),
                 ),
               ],
@@ -412,6 +390,213 @@ class _GeneralTabState extends State<GeneralTab> {
             ),
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// Ayarları dışa aktarmak için bir kod üretip gösteren diyalog - tıpkı
+/// "Uzaktan Erişim" sekmesindeki eşleştirme koduna benziyor, ama kalıcı bir
+/// ilişki kurmaz: yalnızca kodu bilen İLK cihaza, üretim anındaki ayarların
+/// TEK SEFERLİK bir kopyasını gönderir. Kod üretimi/iptali arka plan
+/// servisindeki RemoteControlService üzerinden (FlutterBackgroundService
+/// invoke/on kanalıyla) yürütülür.
+class _ExportCodeDialog extends StatefulWidget {
+  final Map<String, dynamic> config;
+
+  const _ExportCodeDialog({required this.config});
+
+  @override
+  State<_ExportCodeDialog> createState() => _ExportCodeDialogState();
+}
+
+class _ExportCodeDialogState extends State<_ExportCodeDialog> {
+  String? _code;
+  StreamSubscription<Map<String, dynamic>?>? _sub;
+
+  @override
+  void initState() {
+    super.initState();
+    try {
+      _sub = FlutterBackgroundService().on('export_code').listen((event) {
+        final code = event?['code'] as String?;
+        if (mounted && code != null) setState(() => _code = code);
+      });
+      FlutterBackgroundService()
+          .invoke('generate_export_code', {'config': widget.config});
+    } catch (_) {
+      // Arka plan servisi bu platformda/ortamda kullanılamıyor olabilir.
+    }
+  }
+
+  @override
+  void dispose() {
+    _sub?.cancel();
+    try {
+      FlutterBackgroundService().invoke('cancel_export_code');
+    } catch (_) {
+      // Arka plan servisi bu platformda/ortamda kullanılamıyor olabilir.
+    }
+    super.dispose();
+  }
+
+  Future<void> _copyCode() async {
+    final code = _code;
+    if (code == null) return;
+    await Clipboard.setData(ClipboardData(text: code));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Kod kopyalandı.')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final code = _code;
+    return AlertDialog(
+      title: const Text('Ayarları Dışa Aktar'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Bu kodu, ayarları almak istediğiniz cihazda "Kod ile İçe Aktar" '
+              'ekranına girin. Yalnızca aynı yerel ağda (WiFi) çalışır.'),
+          const SizedBox(height: 16),
+          if (code == null)
+            const Center(child: Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: CircularProgressIndicator(),
+            ))
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: SelectableText(
+                    code,
+                    style: const TextStyle(
+                        fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.copy),
+                  tooltip: 'Kopyala',
+                  onPressed: _copyCode,
+                ),
+              ],
+            ),
+          const SizedBox(height: 8),
+          Text(
+            '5 dakika içinde girilmezse ya da bir kez kullanılınca bu kod geçersiz olur.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Kapat')),
+      ],
+    );
+  }
+}
+
+/// Bir cihazda gösterilen dışa aktarma kodunu girip o cihazın ayarlarını
+/// almak için kullanılan diyalog. Başarılıysa (hostName, config) ile
+/// Navigator.pop edilir.
+class _ImportCodeDialog extends StatefulWidget {
+  const _ImportCodeDialog();
+
+  @override
+  State<_ImportCodeDialog> createState() => _ImportCodeDialogState();
+}
+
+class _ImportCodeDialogState extends State<_ImportCodeDialog> {
+  final TextEditingController _codeController = TextEditingController();
+  StreamSubscription<Map<String, dynamic>?>? _statusSub;
+  StreamSubscription<Map<String, dynamic>?>? _resultSub;
+  String _status = '';
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    try {
+      _statusSub = FlutterBackgroundService().on('import_config_status').listen((event) {
+        final status = event?['status'] as String?;
+        if (mounted && status != null) setState(() => _status = status);
+      });
+      _resultSub = FlutterBackgroundService().on('import_config_result').listen((event) {
+        if (!mounted) return;
+        setState(() => _busy = false);
+        final success = event?['success'] as bool? ?? false;
+        if (!success) return;
+        final hostName = event?['host_name'] as String? ?? 'Bilinmeyen Cihaz';
+        final configRaw = event?['config'];
+        if (configRaw is! Map) return;
+        Navigator.pop(context, (hostName, Map<String, dynamic>.from(configRaw)));
+      });
+    } catch (_) {
+      // Arka plan servisi bu platformda/ortamda kullanılamıyor olabilir.
+    }
+  }
+
+  @override
+  void dispose() {
+    _statusSub?.cancel();
+    _resultSub?.cancel();
+    _codeController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final code = _codeController.text.trim();
+    if (code.isEmpty || _busy) return;
+    setState(() {
+      _busy = true;
+      _status = 'Aranıyor...';
+    });
+    try {
+      FlutterBackgroundService().invoke('request_config_export', {'code': code});
+    } catch (_) {
+      // Arka plan servisi bu platformda/ortamda kullanılamıyor olabilir.
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Kod ile İçe Aktar'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+              'Ayarlarını almak istediğiniz cihazda "Dışa Aktar" ile üretilen kodu '
+              'buraya girin.'),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _codeController,
+                  decoration: const InputDecoration(labelText: 'Kod'),
+                  keyboardType: TextInputType.number,
+                  enabled: !_busy,
+                ),
+              ),
+              const SizedBox(width: 8),
+              FilledButton(
+                onPressed: _busy ? null : _submit,
+                child: const Text('İçe Aktar'),
+              ),
+            ],
+          ),
+          if (_status.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(_status, style: Theme.of(context).textTheme.bodySmall),
+            ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Vazgeç')),
       ],
     );
   }
