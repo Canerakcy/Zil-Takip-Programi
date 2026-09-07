@@ -11,6 +11,7 @@ from typing import Any
 
 APP_DIR_NAME = "ZilTakipProgrami"
 CONFIG_FILE_NAME = "config.json"
+PAIRED_DEVICES_FILE_NAME = "paired_devices.json"
 
 
 def get_app_data_dir() -> Path:
@@ -98,8 +99,14 @@ def default_config() -> dict[str, Any]:
         "prayer_times": default_prayer_times(),
         "minimize_to_tray": True,
         "start_with_windows": False,
-        # {"date": "YYYY-AA-GG", "label": "..."} formatında; bu tarihlerde hiç zil çalmaz
+        # {"date": "YYYY-AA-GG", "label": "...", "ring": bool,
+        #  "ring_time": "HH:MM"|None, "ring_sound": str|None} formatında.
+        # "ring" False ise bu tarihte hiç zil çalmaz (klasik tatil günü);
+        # True ise normal program çalmaz ama ring_time'da ring_sound ile
+        # tek seferlik özel bir zil çalar.
         "holidays": [],
+        # Yangın butonu için seçilen ses; None ise varsayılan ses kullanılır.
+        "fire_button_sound": None,
     }
 
 
@@ -198,4 +205,31 @@ def save_config(cfg: dict[str, Any]) -> None:
     tmp_path = path.with_suffix(".tmp")
     with open(tmp_path, "w", encoding="utf-8") as f:
         json.dump(cfg, f, ensure_ascii=False, indent=2)
+    tmp_path.replace(path)
+
+
+def get_paired_devices_path() -> Path:
+    return get_app_data_dir() / PAIRED_DEVICES_FILE_NAME
+
+
+def load_paired_devices_raw() -> list[dict[str, Any]]:
+    """Eşleşmiş cihazları ham dict listesi olarak okur (remote_control.py
+    bunları PairedDevice.from_json ile nesneye çevirir - burada bu modülü
+    içe aktarmamak için döngüsel bağımlılık kurulmaz)."""
+    path = get_paired_devices_path()
+    if not path.exists():
+        return []
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def save_paired_devices_raw(devices: list[dict[str, Any]]) -> None:
+    path = get_paired_devices_path()
+    tmp_path = path.with_suffix(".tmp")
+    with open(tmp_path, "w", encoding="utf-8") as f:
+        json.dump(devices, f, ensure_ascii=False, indent=2)
     tmp_path.replace(path)

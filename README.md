@@ -118,8 +118,23 @@ farklı olduğu için tamamen size bağlı):
   simgesine sağ tıklayıp "Çıkış" seçilir.
 - **Windows açılışında otomatik başlatma**: Bilgisayar her açıldığında
   programın kendiliğinden başlamasını sağlayabilirsiniz.
-- **Tatil günleri**: Belirlediğiniz tarihlerde (resmi/okul tatili vb.)
-  hiçbir zil çalmaz.
+- **Tatil günleri**: Belirlediğiniz tarihlerde normal program/namaz
+  vakitleri çalmaz. İsterseniz "Bu tarihte özel bir zil çalsın mı?"
+  seçeneğini işaretleyip o tarihe özel, tek seferlik bir saat + ses
+  tanımlayabilirsiniz (ör. bir anma töreni zili).
+- **Yangın butonu**: İstediğiniz sesi seçip her iki sürümde de her zaman
+  görünen bir "🔥 YANGIN" butonuna bastığınızda, programlanmış zil
+  saatlerinden bağımsız olarak anında çalar.
+- **Cihaz eşleştirme + uzaktan müdahale**: İki cihaz (Windows ↔ Windows,
+  Android ↔ Android ya da Windows ↔ Android, hepsi karışık desteklenir),
+  internet/sunucu gerekmeden sadece aynı WiFi/yerel ağ üzerinden
+  eşleştirilebilir. Bir cihazda 5-20 haneli bir eşleştirme kodu oluşturup
+  diğer cihaza girdiğinizde, kodu üreten cihazda "bu cihaz bağlanmak
+  istiyor, onaylıyor musunuz?" diyaloğu çıkar. Onaylanınca her iki cihaz
+  da birbirinin zilini uzaktan çaldırabilir/durdurabilir ve tüm ayarlarını
+  görüntüleyip değiştirebilir. Not: bazı misafir/genel WiFi ağlarında
+  cihazlar arası "client isolation" açık olabilir - bu durumda eşleştirme
+  çalışmaz, aynı ağda olmanız yeterli olmayabilir.
 - **Dosyaya log kaydı**: Tüm zil kayıtları, pencere kapansa bile
   incelenebilmesi için ayrıca bir log dosyasına da yazılır.
 

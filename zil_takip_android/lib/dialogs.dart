@@ -303,14 +303,27 @@ class _HolidayDialog extends StatefulWidget {
 class _HolidayDialogState extends State<_HolidayDialog> {
   late final TextEditingController _labelController;
   DateTime? _date;
+  late bool _ring;
+  late TimeOfDay _ringTime;
+  String? _ringSound;
 
   @override
   void initState() {
     super.initState();
-    _labelController =
-        TextEditingController(text: widget.existing?.label ?? '');
-    final existingDate = widget.existing?.date;
+    final e = widget.existing;
+    _labelController = TextEditingController(text: e?.label ?? '');
+    final existingDate = e?.date;
     _date = existingDate != null ? DateTime.tryParse(existingDate) : null;
+    _ring = e?.ring ?? false;
+    final existingRingTime = e?.ringTime;
+    if (existingRingTime != null) {
+      final parts = existingRingTime.split(':');
+      _ringTime =
+          TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+    } else {
+      _ringTime = const TimeOfDay(hour: 9, minute: 0);
+    }
+    _ringSound = e?.ringSound;
   }
 
   @override
@@ -330,13 +343,33 @@ class _HolidayDialogState extends State<_HolidayDialog> {
     if (picked != null) setState(() => _date = picked);
   }
 
+  Future<void> _pickRingTime() async {
+    final picked = await showTimePicker(context: context, initialTime: _ringTime);
+    if (picked != null) setState(() => _ringTime = picked);
+  }
+
+  Future<void> _pickRingSound() async {
+    final path = await pickSoundFile();
+    if (path != null) setState(() => _ringSound = path);
+  }
+
+  String get _ringTimeText =>
+      '${_ringTime.hour.toString().padLeft(2, '0')}:${_ringTime.minute.toString().padLeft(2, '0')}';
+
   void _save() {
     final date = _date;
     if (date == null) return;
     final dateStr =
         '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
     Navigator.pop(
-        context, Holiday(date: dateStr, label: _labelController.text.trim()));
+        context,
+        Holiday(
+          date: dateStr,
+          label: _labelController.text.trim(),
+          ring: _ring,
+          ringTime: _ring ? _ringTimeText : null,
+          ringSound: _ring ? _ringSound : null,
+        ));
   }
 
   @override
@@ -345,24 +378,57 @@ class _HolidayDialogState extends State<_HolidayDialog> {
     return AlertDialog(
       title:
           Text(widget.existing == null ? 'Yeni Tatil Günü' : 'Tatil Gününü Düzenle'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: const Text('Tarih'),
-            subtitle: Text(date == null
-                ? 'Seçilmedi'
-                : '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}'),
-            trailing: const Icon(Icons.calendar_today),
-            onTap: _pickDate,
-          ),
-          TextField(
-            controller: _labelController,
-            decoration: const InputDecoration(labelText: 'Açıklama (ör. Bayram)'),
-          ),
-        ],
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Tarih'),
+              subtitle: Text(date == null
+                  ? 'Seçilmedi'
+                  : '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}'),
+              trailing: const Icon(Icons.calendar_today),
+              onTap: _pickDate,
+            ),
+            TextField(
+              controller: _labelController,
+              decoration:
+                  const InputDecoration(labelText: 'Açıklama (ör. Bayram)'),
+            ),
+            const Divider(height: 24),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Bu tarihte özel bir zil çalsın mı?'),
+              subtitle: const Text(
+                  'İşaretlemezseniz bu tarihte hiç zil çalmaz (klasik tatil '
+                  'günü). İşaretlerseniz normal program/namaz vakitleri yine '
+                  'çalmaz, ama aşağıda seçtiğiniz saatte tek seferlik özel '
+                  'bir zil çalar.'),
+              value: _ring,
+              onChanged: (value) => setState(() => _ring = value ?? false),
+            ),
+            if (_ring) ...[
+              const SizedBox(height: 8),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Saat'),
+                subtitle: Text(_ringTimeText),
+                trailing: const Icon(Icons.access_time),
+                onTap: _pickRingTime,
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Ses'),
+                subtitle: Text(soundDisplayName(_ringSound)),
+                trailing: const Icon(Icons.audiotrack),
+                onTap: _pickRingSound,
+              ),
+            ],
+          ],
+        ),
       ),
       actions: [
         TextButton(

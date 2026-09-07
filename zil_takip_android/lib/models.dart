@@ -151,15 +151,36 @@ class FridayOffset {
 class Holiday {
   String date; // "YYYY-MM-DD"
   String label;
+  // Varsayılan olarak tatil günlerinde hiç zil çalmaz. Bu true ise, normal
+  // program/namaz vakitleri yine çalmaz ama [ringTime]'da [ringSound] ile
+  // tek seferlik özel bir zil çalar (ör. bir anma töreni saati).
+  bool ring;
+  String? ringTime; // "HH:MM", yalnızca ring == true ise kullanılır
+  String? ringSound;
 
-  Holiday({required this.date, required this.label});
+  Holiday({
+    required this.date,
+    required this.label,
+    this.ring = false,
+    this.ringTime,
+    this.ringSound,
+  });
 
   factory Holiday.fromJson(Map<String, dynamic> json) => Holiday(
         date: json['date'] as String,
         label: json['label'] as String? ?? '',
+        ring: json['ring'] as bool? ?? false,
+        ringTime: json['ring_time'] as String?,
+        ringSound: json['ring_sound'] as String?,
       );
 
-  Map<String, dynamic> toJson() => {'date': date, 'label': label};
+  Map<String, dynamic> toJson() => {
+        'date': date,
+        'label': label,
+        'ring': ring,
+        'ring_time': ringTime,
+        'ring_sound': ringSound,
+      };
 }
 
 class PrayerTimesConfig {
@@ -233,6 +254,8 @@ class AppConfig {
   PrayerTimesConfig prayerTimes;
   bool startOnBoot;
   List<Holiday> holidays;
+  // Yangın butonu için seçilen ses. null/"default" -> varsayılan ses.
+  String? fireButtonSound;
 
   AppConfig({
     required this.defaultSound,
@@ -241,6 +264,7 @@ class AppConfig {
     required this.prayerTimes,
     required this.startOnBoot,
     required this.holidays,
+    this.fireButtonSound,
   });
 
   factory AppConfig.fromJson(Map<String, dynamic> json) {
@@ -260,6 +284,7 @@ class AppConfig {
       holidays: holidaysJson
           .map((e) => Holiday.fromJson(e as Map<String, dynamic>))
           .toList(),
+      fireButtonSound: json['fire_button_sound'] as String?,
     );
   }
 
@@ -270,6 +295,7 @@ class AppConfig {
         'prayer_times': prayerTimes.toJson(),
         'start_on_boot': startOnBoot,
         'holidays': holidays.map((e) => e.toJson()).toList(),
+        'fire_button_sound': fireButtonSound,
       };
 
   static AppConfig createDefault() {
@@ -289,6 +315,7 @@ class AppConfig {
       prayerTimes: PrayerTimesConfig.createDefault(),
       startOnBoot: false,
       holidays: [],
+      fireButtonSound: null,
     );
   }
 }

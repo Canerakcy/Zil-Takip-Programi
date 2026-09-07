@@ -11,6 +11,7 @@ import 'general_tab.dart';
 import 'models.dart';
 import 'prayer_tab.dart';
 import 'entries_tab.dart';
+import 'remote_tab.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -24,6 +25,7 @@ class _HomePageState extends State<HomePage> {
   int _selectedIndex = 0;
   final List<String> _logLines = [];
   StreamSubscription<Map<String, dynamic>?>? _logSub;
+  StreamSubscription<Map<String, dynamic>?>? _pairingRequestSub;
   AudioPlayerService? _testPlayerInstance;
   AudioPlayerService get _testPlayer => _testPlayerInstance ??=
       AudioPlayerService(onError: _showAudioError);
@@ -52,11 +54,55 @@ class _HomePageState extends State<HomePage> {
       // Arka plan servisi bu platformda/ortamda kullanılamıyor olabilir
       // (ör. desteklenmeyen platform); kayıt akışı olmadan da arayüz çalışmaya devam eder.
     }
+    try {
+      // Bir eşleştirme isteği hangi sekmede olursanız olun görünmeli - bu
+      // yüzden dinleyici tüm sekmelerin üstündeki HomePage'de kuruluyor.
+      _pairingRequestSub =
+          FlutterBackgroundService().on('pairing_request').listen((event) {
+        final requestId = event?['request_id'] as String?;
+        final name = event?['name'] as String?;
+        if (requestId == null || name == null) return;
+        _showPairingRequestDialog(requestId, name);
+      });
+    } catch (_) {
+      // Arka plan servisi bu platformda/ortamda kullanılamıyor olabilir.
+    }
+  }
+
+  final Set<String> _shownPairingRequestIds = {};
+
+  Future<void> _showPairingRequestDialog(String requestId, String name) async {
+    // Arka plan servisi, UI hazır olana kadar isteği birkaç saniyede bir
+    // tekrar gönderir - burada aynı istek için ikinci bir diyalog açılmasın.
+    if (!mounted || _shownPairingRequestIds.contains(requestId)) return;
+    _shownPairingRequestIds.add(requestId);
+    final approved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Eşleştirme İsteği'),
+        content: Text(
+            "'$name' bu cihaza eşleştirme kodu ile bağlanmak istiyor.\n\n"
+            'Onaylıyor musunuz? Onaylarsanız bu cihaz zili uzaktan '
+            'çaldırabilir, durdurabilir ve tüm ayarları görüntüleyip '
+            'değiştirebilir.'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx, false), child: const Text('Hayır')),
+          FilledButton(
+              onPressed: () => Navigator.pop(ctx, true), child: const Text('Evet')),
+        ],
+      ),
+    );
+    _shownPairingRequestIds.remove(requestId);
+    FlutterBackgroundService()
+        .invoke('pairing_decision', {'request_id': requestId, 'approved': approved ?? false});
   }
 
   @override
   void dispose() {
     _logSub?.cancel();
+    _pairingRequestSub?.cancel();
     _testPlayerInstance?.dispose();
     super.dispose();
   }
@@ -161,6 +207,21 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _ringFireButton() async {
+    final config = _config;
+    if (config == null) return;
+    final played = await _testPlayer.playFile(
+        config.fireButtonSound, config.defaultSound, config.volume);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(played
+          ? 'Yangın zili çalıyor!'
+          : 'Çalınacak ses yok - Genel sekmesinden yangın butonu sesini '
+              'ya da varsayılan sesi ayarlayın.'),
+      backgroundColor: played ? Colors.red[700] : null,
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final config = _config;
@@ -172,6 +233,7 @@ class _HomePageState extends State<HomePage> {
       EntriesTab(config: config, onChanged: _persist, onTest: _testSound),
       PrayerTab(config: config, onChanged: _persist, onTest: _testSound),
       GeneralTab(config: config, onChanged: _persist, logLines: _logLines),
+      const RemoteTab(),
     ];
 
     return Scaffold(
@@ -179,6 +241,13 @@ class _HomePageState extends State<HomePage> {
         title: const Text('🔔 Ceselsan Zil Takip'),
       ),
       body: IndexedStack(index: _selectedIndex, children: tabs),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: _ringFireButton,
+        backgroundColor: Colors.red[700],
+        foregroundColor: Colors.white,
+        icon: const Icon(Icons.local_fire_department),
+        label: const Text('YANGIN'),
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) => setState(() => _selectedIndex = index),
@@ -186,6 +255,7 @@ class _HomePageState extends State<HomePage> {
           NavigationDestination(icon: Icon(Icons.notifications_active), label: 'Zil Programı'),
           NavigationDestination(icon: Icon(Icons.mosque), label: 'Namaz Vakitleri'),
           NavigationDestination(icon: Icon(Icons.settings), label: 'Genel'),
+          NavigationDestination(icon: Icon(Icons.wifi_tethering), label: 'Uzaktan Erişim'),
         ],
       ),
     );

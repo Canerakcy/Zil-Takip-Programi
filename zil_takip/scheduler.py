@@ -54,16 +54,26 @@ class BellScheduler(threading.Thread):
         today = now.date()
         self._reset_daily_state_if_needed(today)
 
+        current_hhmm = now.strftime("%H:%M")
+
         holiday = next((h for h in cfg.get("holidays", [])
                          if h.get("date") == today.isoformat()), None)
         if holiday is not None:
+            label = holiday.get("label") or "Tatil günü"
             if not self._holiday_notice_shown:
                 self._holiday_notice_shown = True
-                label = holiday.get("label") or "Tatil günü"
-                self._on_log(f"Bugün tatil ({label}) - ziller çalmayacak.")
+                if holiday.get("ring"):
+                    self._on_log(
+                        f"Bugün tatil ({label}) - normal program çalmayacak, "
+                        f"{holiday.get('ring_time')} saatinde özel zil çalacak.")
+                else:
+                    self._on_log(f"Bugün tatil ({label}) - ziller çalmayacak.")
+            if holiday.get("ring") and holiday.get("ring_time") == current_hhmm:
+                fire_key = f"holiday:{today.isoformat()}"
+                if fire_key not in self._fired_today:
+                    self._fired_today.add(fire_key)
+                    self._ring(label or "Özel tatil zili", holiday.get("ring_sound"), cfg)
             return
-
-        current_hhmm = now.strftime("%H:%M")
         weekday = now.weekday()  # Pazartesi=0 ... Pazar=6
 
         for entry in cfg.get("entries", []):

@@ -65,8 +65,23 @@ class _GeneralTabState extends State<GeneralTab> {
     widget.onChanged();
   }
 
+  Future<void> _editHoliday(Holiday holiday) async {
+    final updated = await showHolidayDialog(context, existing: holiday);
+    if (updated == null) return;
+    final index = widget.config.holidays.indexOf(holiday);
+    if (index != -1) setState(() => widget.config.holidays[index] = updated);
+    widget.onChanged();
+  }
+
   void _deleteHoliday(Holiday holiday) {
     setState(() => widget.config.holidays.remove(holiday));
+    widget.onChanged();
+  }
+
+  Future<void> _pickFireButtonSound() async {
+    final path = await pickSoundFile();
+    if (path == null) return;
+    setState(() => widget.config.fireButtonSound = path);
     widget.onChanged();
   }
 
@@ -169,7 +184,11 @@ class _GeneralTabState extends State<GeneralTab> {
           Card(
             child: ListTile(
               title: Text(holiday.label.isNotEmpty ? holiday.label : 'Tatil'),
-              subtitle: Text(holiday.date),
+              subtitle: Text(holiday.ring
+                  ? '${holiday.date} • Özel zil: ${holiday.ringTime ?? '--:--'} '
+                      '(${soundDisplayName(holiday.ringSound)})'
+                  : holiday.date),
+              onTap: () => _editHoliday(holiday),
               trailing: IconButton(
                 icon: const Icon(Icons.delete_outline),
                 tooltip: 'Sil',
@@ -177,6 +196,18 @@ class _GeneralTabState extends State<GeneralTab> {
               ),
             ),
           ),
+        const SizedBox(height: 24),
+        Text('Yangın Butonu', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.local_fire_department, color: Colors.red),
+            title: const Text('Yangın Butonu Sesi'),
+            subtitle: Text(soundDisplayName(config.fireButtonSound)),
+            trailing: const Icon(Icons.audiotrack),
+            onTap: _pickFireButtonSound,
+          ),
+        ),
         const SizedBox(height: 24),
         Text('Kayıtlar', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),

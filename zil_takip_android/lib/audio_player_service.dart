@@ -61,6 +61,10 @@ class AudioPlayerService {
     return true;
   }
 
+  Future<void> stop() async {
+    await _player.stop();
+  }
+
   Future<void> dispose() async {
     await _eventSub?.cancel();
     await _player.dispose();

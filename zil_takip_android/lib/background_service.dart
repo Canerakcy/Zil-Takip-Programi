@@ -12,6 +12,7 @@ import 'audio_player_service.dart';
 import 'config_store.dart';
 import 'models.dart';
 import 'prayer_service.dart';
+import 'remote_control.dart';
 
 const String notificationChannelId = 'zil_takip_foreground';
 const String notificationChannelName = 'Ceselsan Zil Takip - Arka Plan Servisi';
@@ -56,10 +57,17 @@ Future<void> initializeBackgroundService({bool autoStartOnBoot = false}) async {
     description: 'Zil zamanı geldiğinde arka planda çalışmaya devam eder.',
     importance: Importance.low,
   );
-  await FlutterLocalNotificationsPlugin()
+  const pairingChannel = AndroidNotificationChannel(
+    pairingNotificationChannelId,
+    pairingNotificationChannelName,
+    description: 'Başka bir cihaz eşleştirme kodu ile bağlanmak istediğinde bildirim gösterir.',
+    importance: Importance.high,
+  );
+  final androidNotifications = FlutterLocalNotificationsPlugin()
       .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(androidChannel);
+          AndroidFlutterLocalNotificationsPlugin>();
+  await androidNotifications?.createNotificationChannel(androidChannel);
+  await androidNotifications?.createNotificationChannel(pairingChannel);
 
   await service.configure(
     androidConfiguration: AndroidConfiguration(
@@ -100,6 +108,8 @@ void onServiceStart(ServiceInstance service) async {
     });
   }
 
+  await _setUpRemoteControl(service, audioPlayer, log);
+
   Timer.periodic(checkInterval, (timer) async {
     try {
       final config = await loadConfig();
@@ -118,7 +128,20 @@ void onServiceStart(ServiceInstance service) async {
       if (holiday != null) {
         if (!holidayNoticeShown) {
           holidayNoticeShown = true;
-          log('Bugün tatil (${holiday.label}) - ziller çalmayacak.');
+          log(holiday.ring
+              ? 'Bugün tatil (${holiday.label}) - normal program çalmayacak, '
+                  '${holiday.ringTime} saatinde özel zil çalacak.'
+              : 'Bugün tatil (${holiday.label}) - ziller çalmayacak.');
+        }
+        final ringTime = holiday.ringTime;
+        if (holiday.ring && ringTime != null && _isDue(ringTime, now)) {
+          final fireKey = 'holiday:$todayStr';
+          if (!firedToday.contains(fireKey)) {
+            firedToday.add(fireKey);
+            log('Zil çalıyor: ${holiday.label.isNotEmpty ? holiday.label : 'Özel tatil zili'}');
+            await audioPlayer.playFile(
+                holiday.ringSound, config.defaultSound, config.volume);
+          }
         }
         return;
       }
@@ -189,6 +212,150 @@ void onServiceStart(ServiceInstance service) async {
     } catch (exc) {
       log('Zamanlayıcı hatası: $exc');
     }
+  });
+}
+
+const String pairingNotificationChannelId = 'zil_takip_pairing';
+const String pairingNotificationChannelName = 'Ceselsan Zil Takip - Eşleştirme İstekleri';
+const int pairingNotificationId = 889;
+
+/// requestId -> onay/red kararını bildiren fonksiyon. Karar UI'dan
+/// 'pairing_decision' olayıyla geldiğinde çağrılır.
+final Map<String, void Function(bool)> _pendingPairingDecisions = {};
+
+/// Arka plan servisi (bu izole/isolate) her zaman canlı olduğu için gelen
+/// eşleştirme istekleri ve uzaktan komutlar burada, UI (ana isolate) ile
+/// [FlutterBackgroundService]'in mevcut olay kanalı (invoke/on - zaten
+/// 'log' için kullanılıyordu) üzerinden köprülenerek işlenir.
+Future<void> _setUpRemoteControl(
+    ServiceInstance service, AudioPlayerService audioPlayer, void Function(String) log) async {
+  late final RemoteControlService remoteControl;
+  remoteControl = RemoteControlService(
+    getConfig: () async => (await loadConfig()).toJson(),
+    applyRemoteConfig: (newCfgJson) async {
+      await saveConfig(AppConfig.fromJson(newCfgJson));
+    },
+    ringNow: (sound) async {
+      final config = await loadConfig();
+      await audioPlayer.playFile(sound, config.defaultSound, config.volume);
+    },
+    stopRinging: audioPlayer.stop,
+    onPairingRequest: (name, decide) =>
+        _handleIncomingPairingRequest(service, name, decide),
+    onLog: log,
+    deviceName: 'Android Telefon',
+    onDevicesChanged: () {
+      savePairedDevicesRaw(remoteControl.pairedDevices.map((p) => p.toJson()).toList());
+    },
+    initialPairedDevices: (await loadPairedDevicesRaw())
+        .map((e) => PairedDevice.fromJson(e))
+        .toList(),
+  );
+
+  try {
+    await remoteControl.start();
+  } catch (exc) {
+    log('Uzaktan erişim başlatılamadı: $exc');
+  }
+
+  service.on('generate_pairing_code').listen((event) {
+    final code = remoteControl.generateCode();
+    service.invoke('pairing_code', {'code': code});
+  });
+
+  service.on('cancel_pairing_code').listen((event) {
+    remoteControl.cancelCode();
+  });
+
+  service.on('connect_with_code').listen((event) async {
+    final code = event?['code'] as String?;
+    if (code == null || code.isEmpty) return;
+    final peer = await remoteControl.pairWithCode(code, (status) {
+      service.invoke('pairing_status', {'status': status});
+    });
+    service.invoke('pairing_result',
+        {'success': peer != null, 'name': peer?.name, 'peer_id': peer?.peerId});
+  });
+
+  service.on('get_paired_devices').listen((event) {
+    service.invoke('paired_devices_updated',
+        {'devices': remoteControl.pairedDevices.map((p) => p.toJson()).toList()});
+  });
+
+  service.on('remove_paired_device').listen((event) {
+    final peerId = event?['peer_id'] as String?;
+    if (peerId != null) remoteControl.removePairedDevice(peerId);
+    service.invoke('paired_devices_updated',
+        {'devices': remoteControl.pairedDevices.map((p) => p.toJson()).toList()});
+  });
+
+  service.on('remote_command').listen((event) async {
+    final requestId = event?['request_id'] as String?;
+    final peerId = event?['peer_id'] as String?;
+    final rawCmd = event?['cmd'];
+    final peer = remoteControl.pairedDevices
+        .where((p) => p.peerId == peerId)
+        .firstOrNull;
+    if (peer == null || rawCmd is! Map) {
+      service.invoke('remote_command_result',
+          {'request_id': requestId, 'error': 'Cihaz bulunamadı.'});
+      return;
+    }
+    try {
+      final result =
+          await remoteControl.sendCommand(peer, Map<String, dynamic>.from(rawCmd));
+      service.invoke('remote_command_result', {'request_id': requestId, 'result': result});
+    } catch (exc) {
+      service.invoke(
+          'remote_command_result', {'request_id': requestId, 'error': exc.toString()});
+    }
+  });
+
+  service.on('pairing_decision').listen((event) {
+    final requestId = event?['request_id'] as String?;
+    final approved = event?['approved'] as bool? ?? false;
+    final pending = _pendingPairingDecisions.remove(requestId);
+    pending?.call(approved);
+  });
+}
+
+void _handleIncomingPairingRequest(
+    ServiceInstance service, String name, void Function(bool) decide) {
+  final requestId = uuid.v4();
+  _pendingPairingDecisions[requestId] = decide;
+
+  FlutterLocalNotificationsPlugin().show(
+    pairingNotificationId,
+    'Eşleştirme İsteği',
+    "'$name' bu cihaza bağlanmak istiyor - onaylamak için uygulamayı açın.",
+    const NotificationDetails(
+      android: AndroidNotificationDetails(
+        pairingNotificationChannelId,
+        pairingNotificationChannelName,
+        importance: Importance.high,
+        priority: Priority.high,
+      ),
+    ),
+  );
+
+  void emit() => service.invoke('pairing_request', {'request_id': requestId, 'name': name});
+  emit();
+
+  var attempts = 0;
+  Timer.periodic(const Duration(seconds: 4), (timer) {
+    attempts++;
+    if (!_pendingPairingDecisions.containsKey(requestId)) {
+      timer.cancel();
+      return;
+    }
+    if (attempts > 22) {
+      // ~90 saniye boyunca kimse yanıtlamadı - güvenli taraf: reddet.
+      timer.cancel();
+      _pendingPairingDecisions.remove(requestId);
+      decide(false);
+      return;
+    }
+    emit();
   });
 }
 

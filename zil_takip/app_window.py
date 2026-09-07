@@ -1,21 +1,25 @@
 """Ceselsan Zil Takip Programı - Ana pencere (Tkinter arayüzü)."""
 from __future__ import annotations
 
+import json
 import os
 import queue
 import subprocess
 import sys
+import threading
 import tkinter as tk
 import uuid
 from datetime import date, datetime
 from tkinter import filedialog, messagebox, ttk
-from typing import Optional
+from typing import Callable, Optional
 
 import app_logging
 import audio_player
 import autostart
 import prayer_service
-from config_store import VAKIT_KEYS, load_config, save_config
+import remote_control
+from config_store import (VAKIT_KEYS, load_config, load_paired_devices_raw,
+                           save_config, save_paired_devices_raw)
 from scheduler import BellScheduler
 from single_instance import SingleInstance
 
@@ -228,34 +232,88 @@ class FridayOffsetDialog(tk.Toplevel):
 
 
 class HolidayDialog(tk.Toplevel):
-    """Tatil günü ekleme penceresi - bu tarihlerde hiçbir zil çalmaz."""
+    """Tatil günü ekleme/düzenleme penceresi. Varsayılan olarak bu tarihte
+    hiçbir zil çalmaz; "Bu tarihte özel bir zil çalsın mı?" işaretlenirse
+    normal program/namaz vakitleri yine çalmaz ama seçilen saatte tek
+    seferlik özel bir zil çalar."""
 
-    def __init__(self, parent):
+    def __init__(self, parent, holiday: Optional[dict] = None):
         super().__init__(parent)
-        self.title("Tatil Günü Ekle")
+        self.title("Tatil Günü" if holiday is None else "Tatil Gününü Düzenle")
         self.configure(bg=BG)
         self.resizable(False, False)
         self.result: Optional[dict] = None
         self.transient(parent)
         self.grab_set()
 
-        self.date_var = tk.StringVar(value=datetime.now().strftime("%d.%m.%Y"))
-        self.label_var = tk.StringVar(value="")
+        holiday = holiday or {}
+        self.existing_date = holiday.get("date")
+        self.date_var = tk.StringVar(
+            value=format_holiday_date(holiday["date"]) if holiday.get("date")
+            else datetime.now().strftime("%d.%m.%Y"))
+        self.label_var = tk.StringVar(value=holiday.get("label", ""))
+        self.ring_var = tk.BooleanVar(value=bool(holiday.get("ring")))
+        self.ring_time_var = tk.StringVar(value=holiday.get("ring_time") or "09:00")
+        ring_sound = holiday.get("ring_sound")
+        self.ring_sound_var = tk.StringVar(value="" if not ring_sound else ring_sound)
 
         pad = {"padx": 10, "pady": 6}
         ttk.Label(self, text="Tarih (GG.AA.YYYY):").grid(row=0, column=0, sticky="w", **pad)
         ttk.Entry(self, textvariable=self.date_var, width=14).grid(
-            row=0, column=1, sticky="w", **pad)
+            row=0, column=1, columnspan=2, sticky="w", **pad)
 
         ttk.Label(self, text="Açıklama:").grid(row=1, column=0, sticky="w", **pad)
         ttk.Entry(self, textvariable=self.label_var, width=32).grid(
-            row=1, column=1, sticky="we", **pad)
+            row=1, column=1, columnspan=2, sticky="we", **pad)
+
+        ttk.Separator(self, orient="horizontal").grid(
+            row=2, column=0, columnspan=3, sticky="we", padx=10, pady=(6, 2))
+
+        ttk.Checkbutton(self, text="Bu tarihte özel bir zil çalsın mı?",
+                         variable=self.ring_var, command=self._update_ring_state).grid(
+            row=3, column=0, columnspan=3, sticky="w", **pad)
+        ttk.Label(self, text="İşaretlemezseniz bu tarihte hiç zil çalmaz (klasik tatil günü).\n"
+                              "İşaretlerseniz normal program/namaz vakitleri yine çalmaz, ama\n"
+                              "aşağıdaki saatte tek seferlik özel bir zil çalar.",
+                  foreground="#666666", justify="left").grid(
+            row=4, column=0, columnspan=3, sticky="w", padx=10)
+
+        self.ring_time_label = ttk.Label(self, text="Saat (SS:DD):")
+        self.ring_time_label.grid(row=5, column=0, sticky="w", **pad)
+        self.ring_time_entry = ttk.Entry(self, textvariable=self.ring_time_var, width=10)
+        self.ring_time_entry.grid(row=5, column=1, sticky="w", **pad)
+
+        self.ring_sound_label = ttk.Label(self, text="Ses dosyası:")
+        self.ring_sound_label.grid(row=6, column=0, sticky="w", **pad)
+        self.ring_sound_entry = ttk.Entry(self, textvariable=self.ring_sound_var, width=28)
+        self.ring_sound_entry.grid(row=6, column=1, sticky="we", **pad)
+        self.ring_sound_button = ttk.Button(self, text="📁 Seç...", command=self._choose_ring_sound)
+        self.ring_sound_button.grid(row=6, column=2, sticky="w", **pad)
+        self.ring_sound_hint = ttk.Label(
+            self, text="Boş bırakılırsa Ses Ayarları'ndaki varsayılan ses çalınır.",
+            foreground="#666666")
+        self.ring_sound_hint.grid(row=7, column=0, columnspan=3, sticky="w", padx=10)
 
         btn_frame = ttk.Frame(self)
-        btn_frame.grid(row=2, column=0, columnspan=2, pady=10)
+        btn_frame.grid(row=8, column=0, columnspan=3, pady=10)
         ttk.Button(btn_frame, text="💾 Kaydet", style="Accent.TButton",
                    command=self._on_save).pack(side="left", padx=6)
         ttk.Button(btn_frame, text="İptal", command=self.destroy).pack(side="left", padx=6)
+
+        self._update_ring_state()
+
+    def _update_ring_state(self) -> None:
+        state = "normal" if self.ring_var.get() else "disabled"
+        for widget in (self.ring_time_label, self.ring_time_entry, self.ring_sound_label,
+                       self.ring_sound_entry, self.ring_sound_button, self.ring_sound_hint):
+            widget.configure(state=state)
+
+    def _choose_ring_sound(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Ses dosyası seç",
+            filetypes=[("Ses dosyaları", "*.wav *.mp3 *.ogg *.flac"), ("Tüm dosyalar", "*.*")])
+        if path:
+            self.ring_sound_var.set(path)
 
     def _on_save(self) -> None:
         date_str = self.date_var.get().strip()
@@ -264,7 +322,93 @@ class HolidayDialog(tk.Toplevel):
         except ValueError:
             messagebox.showerror(APP_TITLE, "Tarih GG.AA.YYYY formatında olmalıdır. Örnek: 23.04.2027")
             return
-        self.result = {"date": parsed.strftime("%Y-%m-%d"), "label": self.label_var.get().strip()}
+        ring = self.ring_var.get()
+        if ring:
+            ring_time = self.ring_time_var.get().strip()
+            try:
+                datetime.strptime(ring_time, "%H:%M")
+            except ValueError:
+                messagebox.showerror(APP_TITLE, "Saat SS:DD formatında olmalıdır. Örnek: 09:00")
+                return
+        else:
+            ring_time = None
+        self.result = {
+            "date": parsed.strftime("%Y-%m-%d"),
+            "label": self.label_var.get().strip(),
+            "ring": ring,
+            "ring_time": ring_time if ring else None,
+            "ring_sound": (self.ring_sound_var.get().strip() or None) if ring else None,
+        }
+        self.destroy()
+
+
+class RemoteSettingsDialog(tk.Toplevel):
+    """Eşleşmiş bir uzak cihazın TÜM ayarlarını görüntüleme/değiştirme
+    penceresi. Uzak cihazın kendi arayüzündeki her sekmeyi burada ayrı ayrı
+    yeniden inşa etmek yerine (büyük bir kod tekrarı olurdu), ayarlar ham
+    JSON olarak gösterilir - hangi alanın ne işe yaradığı programın kendi
+    sekmelerinden (Zil Programı/Namaz Vakitleri/Ses Ayarları/Genel) zaten
+    bilinir; burada amaç tüm ayarlara erişip değiştirebilmektir."""
+
+    def __init__(self, parent, peer: "remote_control.PairedDevice", config_data: dict,
+                 manager: "remote_control.RemoteControlManager", on_log: Callable[[str], None]):
+        super().__init__(parent)
+        self.title(f"Uzak Ayarlar - {peer.name}")
+        self.configure(bg=BG)
+        self.geometry("640x560")
+        self.transient(parent)
+        self.peer = peer
+        self.manager = manager
+        self.on_log = on_log
+
+        ttk.Label(
+            self, text=f"'{peer.name}' cihazının TÜM ayarları (JSON). Düzenleyip "
+                       "'Uzak Cihaza Gönder' ile gönderebilirsiniz.",
+            wraplength=600, justify="left", background=BG).pack(anchor="w", padx=10, pady=8)
+
+        text_frame = ttk.Frame(self)
+        text_frame.pack(fill="both", expand=True, padx=10, pady=4)
+        self.text = tk.Text(text_frame, wrap="none", font=("Consolas", 10))
+        yscroll = ttk.Scrollbar(text_frame, orient="vertical", command=self.text.yview)
+        xscroll = ttk.Scrollbar(text_frame, orient="horizontal", command=self.text.xview)
+        self.text.configure(yscrollcommand=yscroll.set, xscrollcommand=xscroll.set)
+        self.text.grid(row=0, column=0, sticky="nsew")
+        yscroll.grid(row=0, column=1, sticky="ns")
+        xscroll.grid(row=1, column=0, sticky="we")
+        text_frame.rowconfigure(0, weight=1)
+        text_frame.columnconfigure(0, weight=1)
+        self.text.insert("1.0", json.dumps(config_data, ensure_ascii=False, indent=2))
+
+        btn_frame = ttk.Frame(self)
+        btn_frame.pack(fill="x", padx=10, pady=8)
+        ttk.Button(btn_frame, text="📤 Uzak Cihaza Gönder", style="Accent.TButton",
+                   command=self._send).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="Kapat", command=self.destroy).pack(side="left", padx=4)
+
+    def _send(self) -> None:
+        raw = self.text.get("1.0", "end").strip()
+        try:
+            new_cfg = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            messagebox.showerror(APP_TITLE, f"Geçersiz JSON: {exc}")
+            return
+        if not isinstance(new_cfg, dict):
+            messagebox.showerror(APP_TITLE, "Ayarlar bir JSON nesnesi (obje) olmalıdır.")
+            return
+
+        def worker():
+            try:
+                result = self.manager.send_command(self.peer, {"cmd": "set_config",
+                                                                 "config": new_cfg})
+            except Exception as exc:
+                self.on_log(f"'{self.peer.name}' cihazına ayarlar gönderilemedi: {exc}")
+                return
+            if result.get("ok"):
+                self.on_log(f"'{self.peer.name}' cihazına ayarlar gönderildi.")
+            else:
+                self.on_log(f"'{self.peer.name}' ayarları reddetti: {result.get('error')}")
+
+        threading.Thread(target=worker, daemon=True).start()
         self.destroy()
 
 
@@ -300,6 +444,22 @@ class App(tk.Tk):
 
         self.scheduler = BellScheduler(get_config=lambda: self.cfg, on_log=self._log)
         self.scheduler.start()
+
+        self.remote_control = remote_control.RemoteControlManager(
+            get_config=lambda: self.cfg,
+            apply_remote_config=self._apply_remote_config,
+            ring_now=self._remote_ring_now,
+            stop_ringing=audio_player.stop,
+            on_pairing_request=self._on_remote_pairing_request,
+            on_log=self._log,
+            on_devices_changed=self._save_paired_devices,
+            initial_paired_devices=[remote_control.PairedDevice.from_json(d)
+                                     for d in load_paired_devices_raw()],
+        )
+        try:
+            self.remote_control.start()
+        except OSError as exc:
+            self._log(f"Uzaktan erişim başlatılamadı (port kullanımda olabilir): {exc}")
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -359,15 +519,18 @@ class App(tk.Tk):
         self.prayer_tab = ttk.Frame(notebook)
         self.audio_tab = ttk.Frame(notebook)
         self.general_tab = ttk.Frame(notebook)
+        self.remote_tab = ttk.Frame(notebook)
         notebook.add(self.entries_tab, text="🔔 Zil Programı")
         notebook.add(self.prayer_tab, text="🕌 Namaz Vakitleri")
         notebook.add(self.audio_tab, text="🔊 Ses Ayarları")
         notebook.add(self.general_tab, text="⚙️ Genel")
+        notebook.add(self.remote_tab, text="🔗 Uzaktan Erişim")
 
         self._build_entries_tab()
         self._build_prayer_tab()
         self._build_audio_tab()
         self._build_general_tab()
+        self._build_remote_tab()
 
         log_frame = ttk.LabelFrame(self, text="📋 Kayıtlar")
         log_frame.pack(fill="both", expand=False, padx=10, pady=(0, 10))
@@ -436,6 +599,21 @@ class App(tk.Tk):
         self.clock_var = tk.StringVar()
         ttk.Label(header, textvariable=self.clock_var, style="HeaderClock.TLabel").pack(
             side="right", padx=18)
+
+        fire_btn = tk.Button(header, text="🔥 YANGIN", font=FONT_BOLD, fg="white",
+                              bg="#b3261e", activebackground="#8a1c17", activeforeground="white",
+                              relief="flat", padx=14, pady=6, cursor="hand2",
+                              command=self._ring_fire_button)
+        fire_btn.pack(side="right", padx=8)
+
+    def _ring_fire_button(self) -> None:
+        sound = self.cfg.get("fire_button_sound") or "default"
+        try:
+            audio_player.play_file(sound, self.cfg.get("output_device"),
+                                    self.cfg.get("default_sound"), self.cfg.get("volume", 1.0))
+            self._log("Zil çalıyor: Yangın Butonu")
+        except Exception as exc:
+            messagebox.showerror(APP_TITLE, f"Ses çalınamadı: {exc}")
 
     def _update_clock(self) -> None:
         now = datetime.now()
@@ -609,7 +787,28 @@ class App(tk.Tk):
         ttk.Button(frame, text="🔊 Test Sesi Çal", style="Accent.TButton",
                    command=self._test_default_sound).grid(row=3, column=1, sticky="w", **pad)
 
+        ttk.Separator(frame, orient="horizontal").grid(
+            row=4, column=0, columnspan=3, sticky="we", padx=10, pady=10)
+
+        ttk.Label(frame, text="🔥 Yangın butonu sesi:").grid(row=5, column=0, sticky="w", **pad)
+        self.fire_button_sound_var = tk.StringVar(
+            value=self.cfg.get("fire_button_sound")
+            or "(Seçilmedi - varsayılan zil sesi çalınır)")
+        ttk.Entry(frame, textvariable=self.fire_button_sound_var, width=40, state="readonly").grid(
+            row=5, column=1, sticky="we", **pad)
+        ttk.Button(frame, text="📁 Seç...", command=self._choose_fire_button_sound).grid(
+            row=5, column=2, sticky="w", **pad)
+
         frame.columnconfigure(1, weight=1)
+
+    def _choose_fire_button_sound(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Yangın butonu için ses dosyası seç",
+            filetypes=[("Ses dosyaları", "*.wav *.mp3 *.ogg *.flac"), ("Tüm dosyalar", "*.*")])
+        if path:
+            self.fire_button_sound_var.set(path)
+            self.cfg["fire_button_sound"] = path
+            self._persist()
 
     def _build_general_tab(self) -> None:
         frame = self.general_tab
@@ -644,25 +843,254 @@ class App(tk.Tk):
         ttk.Button(log_row, text="📁 Log Klasörünü Aç", command=self._open_log_folder).pack(
             side="left", padx=8)
 
-        holidays_frame = ttk.LabelFrame(frame, text="Tatil Günleri (bu tarihlerde hiç zil çalmaz)")
+        holidays_frame = ttk.LabelFrame(
+            frame, text="Tatil Günleri (normal program bu tarihlerde çalmaz)")
         holidays_frame.pack(fill="both", expand=True, padx=10, pady=8)
 
-        columns = ("date", "label")
+        columns = ("date", "label", "ring")
         self.holidays_tree = ttk.Treeview(holidays_frame, columns=columns, show="headings",
                                            height=8)
         self.holidays_tree.heading("date", text="Tarih")
         self.holidays_tree.heading("label", text="Açıklama")
+        self.holidays_tree.heading("ring", text="Özel Zil")
         self.holidays_tree.column("date", width=110, anchor="w")
-        self.holidays_tree.column("label", width=420, anchor="w")
+        self.holidays_tree.column("label", width=300, anchor="w")
+        self.holidays_tree.column("ring", width=180, anchor="w")
         self.holidays_tree.tag_configure("oddrow", background=ROW_ODD)
         self.holidays_tree.tag_configure("evenrow", background=ROW_EVEN)
         self.holidays_tree.pack(fill="both", expand=True, padx=8, pady=8)
+        self.holidays_tree.bind("<Double-1>", lambda e: self._edit_holiday())
 
         btn_frame = ttk.Frame(holidays_frame)
         btn_frame.pack(fill="x", padx=8, pady=(0, 8))
         ttk.Button(btn_frame, text="➕ Ekle", style="Accent.TButton",
                    command=self._add_holiday).pack(side="left", padx=4)
+        ttk.Button(btn_frame, text="✏️ Düzenle", command=self._edit_holiday).pack(
+            side="left", padx=4)
         ttk.Button(btn_frame, text="🗑️ Sil", command=self._delete_holiday).pack(side="left", padx=4)
+
+    # ---------- Uzaktan erişim sekmesi ----------
+    def _build_remote_tab(self) -> None:
+        frame = self.remote_tab
+        pad = {"padx": 10, "pady": 6}
+
+        host_frame = ttk.LabelFrame(frame, text="Bu Cihazı Eşleştir (başka bir cihaz buna bağlansın)")
+        host_frame.pack(fill="x", padx=10, pady=8)
+        ttk.Label(
+            host_frame,
+            text="Bir eşleştirme kodu oluşturun ve karşı cihaza girin. Onayladığınızda "
+                 "karşı cihaz zili uzaktan çaldırabilir/durdurabilir ve tüm ayarları "
+                 "görüntüleyip değiştirebilir. Yalnızca aynı yerel ağda (WiFi/LAN) çalışır.",
+            wraplength=760, justify="left").pack(anchor="w", **pad)
+        code_row = ttk.Frame(host_frame)
+        code_row.pack(anchor="w", fill="x", **pad)
+        ttk.Button(code_row, text="🔑 Eşleştirme Kodu Oluştur", style="Accent.TButton",
+                   command=self._generate_pairing_code).pack(side="left")
+        self.pairing_code_var = tk.StringVar(value="")
+        ttk.Label(code_row, textvariable=self.pairing_code_var,
+                  font=("Segoe UI", 20, "bold"), foreground=ACCENT_DARK).pack(side="left", padx=16)
+
+        connect_frame = ttk.LabelFrame(frame, text="Başka Bir Cihaza Bağlan (kod ile)")
+        connect_frame.pack(fill="x", padx=10, pady=8)
+        connect_row = ttk.Frame(connect_frame)
+        connect_row.pack(anchor="w", fill="x", **pad)
+        ttk.Label(connect_row, text="Kod:").pack(side="left")
+        self.pairing_code_entry_var = tk.StringVar(value="")
+        ttk.Entry(connect_row, textvariable=self.pairing_code_entry_var, width=24).pack(
+            side="left", padx=8)
+        ttk.Button(connect_row, text="🔗 Bağlan", style="Accent.TButton",
+                   command=self._connect_with_code).pack(side="left")
+        self.pairing_status_var = tk.StringVar(value="")
+        ttk.Label(connect_frame, textvariable=self.pairing_status_var,
+                  foreground="#666666").pack(anchor="w", padx=10, pady=(0, 8))
+
+        devices_frame = ttk.LabelFrame(frame, text="Eşleşmiş Cihazlar")
+        devices_frame.pack(fill="both", expand=True, padx=10, pady=8)
+        self.paired_tree = ttk.Treeview(devices_frame, columns=("name",), show="headings",
+                                         height=6)
+        self.paired_tree.heading("name", text="Cihaz")
+        self.paired_tree.column("name", width=300, anchor="w")
+        self.paired_tree.tag_configure("oddrow", background=ROW_ODD)
+        self.paired_tree.tag_configure("evenrow", background=ROW_EVEN)
+        self.paired_tree.pack(fill="both", expand=True, padx=8, pady=8)
+
+        pdev_btn_frame = ttk.Frame(devices_frame)
+        pdev_btn_frame.pack(fill="x", padx=8, pady=(0, 8))
+        ttk.Button(pdev_btn_frame, text="🔔 Zili Çal", command=self._remote_ring_selected).pack(
+            side="left", padx=4)
+        ttk.Button(pdev_btn_frame, text="⏹ Durdur", command=self._remote_stop_selected).pack(
+            side="left", padx=4)
+        ttk.Button(pdev_btn_frame, text="⚙️ Ayarları Görüntüle/Değiştir",
+                   command=self._remote_edit_settings_selected).pack(side="left", padx=4)
+        ttk.Button(pdev_btn_frame, text="🗑️ Eşleştirmeyi Kaldır",
+                   command=self._remote_remove_selected).pack(side="left", padx=4)
+
+        self._refresh_paired_devices_tree()
+
+    def _refresh_paired_devices_tree(self) -> None:
+        self.paired_tree.delete(*self.paired_tree.get_children())
+        for i, peer in enumerate(self.remote_control.paired_devices):
+            tag = "evenrow" if i % 2 == 0 else "oddrow"
+            self.paired_tree.insert("", "end", iid=peer.peer_id, tags=(tag,), values=(peer.name,))
+
+    def _selected_peer(self) -> Optional["remote_control.PairedDevice"]:
+        selection = self.paired_tree.selection()
+        if not selection:
+            messagebox.showinfo(APP_TITLE, "Lütfen bir cihaz seçin.")
+            return None
+        peer_id = selection[0]
+        return next((p for p in self.remote_control.paired_devices if p.peer_id == peer_id), None)
+
+    def _generate_pairing_code(self) -> None:
+        code = self.remote_control.generate_code()
+        self.pairing_code_var.set(f"{code}   (5 dakika geçerli)")
+
+    def _connect_with_code(self) -> None:
+        code = self.pairing_code_entry_var.get().strip()
+        if not code:
+            messagebox.showinfo(APP_TITLE, "Lütfen karşı cihazda gösterilen kodu girin.")
+            return
+        self.pairing_status_var.set("Aranıyor...")
+
+        def worker():
+            def status(text: str) -> None:
+                try:
+                    self.after(0, lambda: self.pairing_status_var.set(text))
+                except RuntimeError:
+                    pass
+            peer = self.remote_control.pair_with_code(code, status)
+            if peer is not None:
+                try:
+                    self.after(0, self._refresh_paired_devices_tree)
+                except RuntimeError:
+                    pass
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _remote_ring_selected(self) -> None:
+        peer = self._selected_peer()
+        if peer is None:
+            return
+        self._run_remote_command(peer, {"cmd": "ring_now", "sound": None},
+                                  success_message="Uzak cihazda zil çaldırıldı.")
+
+    def _remote_stop_selected(self) -> None:
+        peer = self._selected_peer()
+        if peer is None:
+            return
+        self._run_remote_command(peer, {"cmd": "stop"}, success_message="Uzak cihazda durduruldu.")
+
+    def _remote_remove_selected(self) -> None:
+        peer = self._selected_peer()
+        if peer is None:
+            return
+        if not messagebox.askyesno(APP_TITLE, f"'{peer.name}' eşleştirmesi kaldırılsın mı?"):
+            return
+        self.remote_control.remove_paired_device(peer.peer_id)
+        self._refresh_paired_devices_tree()
+
+    def _remote_edit_settings_selected(self) -> None:
+        peer = self._selected_peer()
+        if peer is None:
+            return
+
+        def worker():
+            try:
+                result = self.remote_control.send_command(peer, {"cmd": "get_config"})
+            except Exception as exc:
+                self._log(f"Uzak ayarlar alınamadı: {exc}")
+                try:
+                    self.after(0, lambda: messagebox.showerror(
+                        APP_TITLE, f"'{peer.name}' cihazına bağlanılamadı: {exc}"))
+                except RuntimeError:
+                    pass
+                return
+            if not result.get("ok"):
+                return
+            try:
+                self.after(0, lambda: RemoteSettingsDialog(self, peer, result.get("data", {}),
+                                                             self.remote_control, self._log))
+            except RuntimeError:
+                pass
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def _run_remote_command(self, peer: "remote_control.PairedDevice", cmd: dict,
+                             success_message: str) -> None:
+        def worker():
+            try:
+                result = self.remote_control.send_command(peer, cmd)
+            except Exception as exc:
+                self._log(f"'{peer.name}' cihazına ulaşılamadı: {exc}")
+                return
+            if result.get("ok"):
+                self._log(success_message)
+            else:
+                self._log(f"'{peer.name}' komutu reddetti: {result.get('error')}")
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    # ---------- Uzaktan erişim: gelen istekler/komutlar ----------
+    def _on_remote_pairing_request(self, requester_name: str,
+                                    decide: Callable[[bool], None]) -> None:
+        def ask() -> None:
+            approved = messagebox.askyesno(
+                APP_TITLE,
+                f"'{requester_name}' bu cihaza eşleştirme kodu ile bağlanmak istiyor.\n\n"
+                "Onaylıyor musunuz? Onaylarsanız bu cihaz zili uzaktan çaldırabilir, "
+                "durdurabilir ve tüm ayarları görüntüleyip değiştirebilir.")
+            decide(approved)
+        try:
+            self.after(0, ask)
+        except RuntimeError:
+            decide(False)
+
+    def _remote_ring_now(self, sound: Optional[str]) -> None:
+        try:
+            audio_player.play_file(sound, self.cfg.get("output_device"),
+                                    self.cfg.get("default_sound"), self.cfg.get("volume", 1.0))
+        except Exception as exc:
+            self._log(f"Uzaktan zil çalınamadı: {exc}")
+
+    def _apply_remote_config(self, new_cfg: dict) -> None:
+        def do_apply() -> None:
+            from config_store import default_config
+            merged = default_config()
+            merged.update(new_cfg)
+            self.cfg = merged
+            save_config(self.cfg)
+            self._rebuild_all_tabs()
+            self._log("Ayarlar uzaktan güncellendi.")
+        try:
+            self.after(0, do_apply)
+        except RuntimeError:
+            pass
+
+    def _rebuild_all_tabs(self) -> None:
+        for tab in (self.entries_tab, self.prayer_tab, self.audio_tab, self.general_tab,
+                    self.remote_tab):
+            for child in tab.winfo_children():
+                child.destroy()
+        self._build_entries_tab()
+        self._build_prayer_tab()
+        self._build_audio_tab()
+        self._build_general_tab()
+        self._build_remote_tab()
+        self._refresh_entries_tree()
+        self._refresh_friday_tree()
+        self._refresh_devices()
+        self._refresh_holidays_tree()
+
+    def _save_paired_devices(self) -> None:
+        save_paired_devices_raw([p.to_json() for p in self.remote_control.paired_devices])
+
+        def refresh() -> None:
+            if hasattr(self, "paired_tree"):
+                self._refresh_paired_devices_tree()
+        try:
+            self.after(0, refresh)
+        except RuntimeError:
+            pass
 
     # ---------- Yardımcı: log ----------
     def _log(self, message: str) -> None:
@@ -986,8 +1414,10 @@ class App(tk.Tk):
         holidays = sorted(self.cfg.get("holidays", []), key=lambda h: h.get("date", ""))
         for i, holiday in enumerate(holidays):
             tag = "evenrow" if i % 2 == 0 else "oddrow"
+            ring_text = f"{holiday.get('ring_time')} - {format_sound(holiday.get('ring_sound'))}" \
+                if holiday.get("ring") else "(Zil çalmaz)"
             self.holidays_tree.insert("", "end", iid=holiday["date"], tags=(tag,), values=(
-                format_holiday_date(holiday.get("date", "")), holiday.get("label", "")))
+                format_holiday_date(holiday.get("date", "")), holiday.get("label", ""), ring_text))
 
     def _add_holiday(self) -> None:
         dialog = HolidayDialog(self)
@@ -996,6 +1426,23 @@ class App(tk.Tk):
             self.cfg.setdefault("holidays", [])
             self.cfg["holidays"] = [h for h in self.cfg["holidays"]
                                      if h["date"] != dialog.result["date"]]
+            self.cfg["holidays"].append(dialog.result)
+            self._persist()
+            self._refresh_holidays_tree()
+
+    def _edit_holiday(self) -> None:
+        selection = self.holidays_tree.selection()
+        if not selection:
+            messagebox.showinfo(APP_TITLE, "Lütfen düzenlemek için bir tarih seçin.")
+            return
+        date_iso = selection[0]
+        holiday = next((h for h in self.cfg.get("holidays", []) if h["date"] == date_iso), None)
+        if holiday is None:
+            return
+        dialog = HolidayDialog(self, holiday=holiday)
+        self.wait_window(dialog)
+        if dialog.result:
+            self.cfg["holidays"] = [h for h in self.cfg["holidays"] if h["date"] != date_iso]
             self.cfg["holidays"].append(dialog.result)
             self._persist()
             self._refresh_holidays_tree()
@@ -1022,5 +1469,6 @@ class App(tk.Tk):
 
     def _quit_app(self) -> None:
         self.scheduler.stop()
+        self.remote_control.stop()
         self._stop_tray()
         self.destroy()

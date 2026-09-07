@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'models.dart';
 
 const String configFileName = 'config.json';
+const String pairedDevicesFileName = 'paired_devices.json';
 
 Future<Directory> getAppDataDir() async {
   final dir = await getApplicationDocumentsDirectory();
@@ -45,5 +46,30 @@ Future<void> saveConfig(AppConfig config) async {
   final tmpFile = File('${file.path}.tmp');
   final content = const JsonEncoder.withIndent('  ').convert(config.toJson());
   await tmpFile.writeAsString(content, flush: true);
+  await tmpFile.rename(file.path);
+}
+
+Future<File> getPairedDevicesFile() async {
+  final dir = await getAppDataDir();
+  return File('${dir.path}/$pairedDevicesFileName');
+}
+
+Future<List<Map<String, dynamic>>> loadPairedDevicesRaw() async {
+  final file = await getPairedDevicesFile();
+  if (!await file.exists()) return [];
+  try {
+    final content = await file.readAsString();
+    final decoded = jsonDecode(content);
+    if (decoded is! List) return [];
+    return decoded.cast<Map<String, dynamic>>();
+  } catch (_) {
+    return [];
+  }
+}
+
+Future<void> savePairedDevicesRaw(List<Map<String, dynamic>> devices) async {
+  final file = await getPairedDevicesFile();
+  final tmpFile = File('${file.path}.tmp');
+  await tmpFile.writeAsString(jsonEncode(devices), flush: true);
   await tmpFile.rename(file.path);
 }
