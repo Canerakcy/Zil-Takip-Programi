@@ -20,5 +20,12 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+    // Gerçek dart:io tabanlı config yüklemesi bu sahte-zaman test ortamında
+    // tamamlanmadığından (bkz. yorumlar yukarıda), _load()'daki 10 saniyelik
+    // zaman aşımının temiz bir şekilde ateşlenip iptal edilmesi için saatin
+    // ileri alınması gerekir - aksi halde test "pending timer" hatasıyla
+    // başarısız olur.
+    await tester.pump(const Duration(seconds: 11));
   });
 }

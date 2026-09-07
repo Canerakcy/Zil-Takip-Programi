@@ -56,8 +56,16 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _load() async {
-    final config = await loadConfig();
-    setState(() => _config = config);
+    AppConfig config;
+    try {
+      config = await loadConfig().timeout(const Duration(seconds: 10));
+    } catch (_) {
+      // Ayarlar diskten okunamadı (ör. bir platform eklentisi bu ortamda
+      // yanıt vermiyor) - kullanıcı sonsuza kadar yükleniyor ekranında
+      // kalmasın diye varsayılan ayarlarla devam edilir.
+      config = AppConfig.createDefault();
+    }
+    if (mounted) setState(() => _config = config);
   }
 
   Future<void> _requestNotificationPermission() async {
