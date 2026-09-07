@@ -66,6 +66,18 @@ dev_dependencies:
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
 
+# audioplayers_android'in pub.dev sürümü, sesi başlatmak için MediaPlayer.
+# start() yerine kırılgan bir playbackParams/setSpeed hilesine dayanıyor -
+# bu API tam olarak Android 6.0 (API 23) ile geldi ve bazı cihaz/OEM
+# üretici yazılımlarında (özellikle ilk Marshmallow sürümlerinde) örtük
+# başlatma davranışını desteklemiyor: hiçbir hata olmadan ses hiç
+# başlamıyor. third_party/audioplayers_android, bunu doğrudan
+# mediaPlayer.start() çağıran yerel/düzeltilmiş bir kopyadır - ayrıntı
+# için third_party/audioplayers_android/pubspec.yaml'daki nota bakın.
+dependency_overrides:
+  audioplayers_android:
+    path: third_party/audioplayers_android
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 

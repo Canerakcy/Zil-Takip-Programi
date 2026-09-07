@@ -1,0 +1,32 @@
+# CESELSAN NOTU: Bu, pub.dev'deki audioplayers_android 5.2.1 paketinin
+# yerel, düzeltilmiş (vendored/patched) bir kopyasıdır - pubspec.yaml'daki
+# dependency_overrides ile kullanılıyor. Değişiklik:
+# MediaPlayerWrapper.kt'deki start(), sesi başlatmak için
+# mediaPlayer.playbackParams = ...setSpeed(1.0f) (yalnızca API 23'te
+# tanıtılmış, "implicitly starts playback" davranışına dayanan kırılgan
+# bir API) yerine doğrudan mediaPlayer.start() çağırıyor. Android 6.0.1
+# (API 23) cihazlarda "hiçbir hata yok ama ses de gelmiyor" şikayetinin
+# en olası nedeni buydu; Android 7+'ta aynı API'nin daha olgun/düzeltilmiş
+# OEM implementasyonları muhtemelen sorunu maskeliyordu.
+name: audioplayers_android
+description: Android implementation of audioplayers, a Flutter plugin to play multiple audio files simultaneously (Ceselsan patch)
+version: 5.2.1
+homepage: https://github.com/bluefireteam/audioplayers
+repository: https://github.com/bluefireteam/audioplayers/tree/master/packages/audioplayers_android
+
+flutter:
+  plugin:
+    implements: audioplayers
+    platforms:
+      android:
+        package: xyz.luan.audioplayers
+        pluginClass: AudioplayersPlugin
+
+dependencies:
+  audioplayers_platform_interface: ^7.1.1
+  flutter:
+    sdk: flutter
+
+environment:
+  sdk: ^3.6.0
+  flutter: '>=3.27.0'

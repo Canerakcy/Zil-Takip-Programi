@@ -26,12 +26,11 @@ packages:
     source: hosted
     version: "6.6.0"
   audioplayers_android:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: audioplayers_android
-      sha256: "60a6728277228413a85755bd3ffd6fab98f6555608923813ce383b190a360605"
-      url: "https://pub.dev"
-    source: hosted
+      path: "third_party/audioplayers_android"
+      relative: true
+    source: path
     version: "5.2.1"
   audioplayers_darwin:
     dependency: transitive
