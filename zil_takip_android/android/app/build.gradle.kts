@@ -22,12 +22,10 @@ android {
         applicationId = "com.ceselsan.zil_takip_android"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // Flutter'ın varsayılanı (24 / Android 7.0) hedef cihazı (min Android 5.0)
-        // dışlar; flutter_local_notifications'ın kendi asgari gereksinimi olan
-        // 21'e (Android 5.0) sabitlendi - kullandığımız diğer eklentilerin hepsi
-        // (permission_handler 19, audioplayers 19, background_service 16) bu
-        // sınırın altında kalıyor.
-        minSdk = 21
+        // Kullanılacak telefon en az Android 7.0 (API 24) - bu zaten Flutter'ın
+        // bu sürümdeki kendi asgari desteklediği seviye (motor daha eskisini
+        // çalıştırmıyor), o yüzden ekstra bir şey yapmaya gerek yok.
+        minSdk = flutter.minSdkVersion
         // flutter.targetSdkVersion bu Flutter sürümünde 36 (Android 16) gibi
         // çok yeni/deneysel bir seviyeye varsayılan oluyor - gerçek cihazlarda
         // (test cihazımız Android 13/14) uygulamanın açılır açılmaz çökmesine
