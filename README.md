@@ -217,3 +217,19 @@ pyinstaller zil_takip.spec --noconfirm --clean
   **Dikkat**: x86 (32-bit) sürümünü kurmak bu hatayı ÇÖZMEZ - mutlaka
   x64 sürümünü kurun. Kurduktan sonra bilgisayarı yeniden başlatmanız
   gerekebilir.
+  **vc_redist.x64.exe'yi kurduktan sonra hata hâlâ devam ediyorsa**: Windows
+  7'nin **Service Pack 1 (SP1)** yüklü olduğundan emin olun (`winver` yazıp
+  Başlat menüsünden çalıştırarak kontrol edilebilir) ve **KB2533623**
+  güncellemesinin kurulu olduğunu doğrulayın. Bu, 2011'den kalma, çok eski
+  ama hâlâ gerekli bir güvenlik güncellemesidir - VC++ 2015-2022
+  redistributable'ının Windows 7'de düzgün çalışabilmesi için `kernel32.dll`'e
+  `SetDefaultDllDirectories` fonksiyonunu ekler; bu güncelleme olmadan
+  redistributable kurulsa bile programlar yine "DLL bulunamadı" hatasıyla
+  açılmayabilir. Uzun süredir Windows Update yapılmamış bir bilgisayarda bu
+  eksik olabilir. Önce **Windows Update**'i deneyin (hâlâ Microsoft
+  sunucularına erişebiliyorsa otomatik sunulabilir); olmazsa resmi
+  [Microsoft Update Catalog](https://catalog.update.microsoft.com/Search.aspx?q=KB2533623)
+  üzerinden arayıp indirin (üçüncü parti/arşiv sitelerinden **değil** -
+  bu bir güvenlik güncellemesi, yalnızca Microsoft'un kendi kataloğundan
+  indirin). Kurduktan sonra bilgisayarı yeniden başlatıp vc_redist.x64.exe'yi
+  tekrar çalıştırın.
