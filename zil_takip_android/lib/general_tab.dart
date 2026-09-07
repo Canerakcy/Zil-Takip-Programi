@@ -1,6 +1,10 @@
 // "Genel" sekmesi - varsayılan ses, ses seviyesi, telefon açılınca otomatik
 // başlatma, tatil günleri ve kayıt (log) görünümü. Windows sürümündeki
 // _build_general_tab()/_build_audio_tab()'ın karşılığı.
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -12,6 +16,18 @@ class GeneralTab extends StatefulWidget {
   final AppConfig config;
   final VoidCallback onChanged;
   final List<String> logLines;
+
+  /// Ayarları JSON dosyasına kaydetme (yedekleme) - widget.config'in
+  /// KENDİSİ (yerel modda bu telefonun, uzak modda eşleşmiş cihazın son
+  /// çekilen ayarları) dışa aktarılır, bu yüzden ayrı bir callback
+  /// gerekmez.
+  ///
+  /// İçe aktarma ise TÜM ayarların yerini alan yepyeni bir AppConfig nesnesi
+  /// üretir - widget.config'i mutasyona uğratmak yerine (StatefulWidget'lar
+  /// arasında referans paylaşımı kırılgan olurdu) çağırana bu yeni nesneyi
+  /// TESLİM EDİYORUZ; çağıran (HomePage: yerelde kaydet, RemoteSettingsPage:
+  /// eşleşmiş cihaza gönder) neyle ne yapacağını bilir.
+  final Future<void> Function(AppConfig imported) onImportConfig;
 
   /// Bu sekme, eşleşmiş UZAK bir cihazın ayarlarını göstermek için mi
   /// kullanılıyor (bkz. RemoteSettingsPage)? Telefon açılınca otomatik
@@ -28,6 +44,7 @@ class GeneralTab extends StatefulWidget {
     required this.config,
     required this.onChanged,
     required this.logLines,
+    required this.onImportConfig,
     this.isRemote = false,
   });
 
@@ -74,6 +91,74 @@ class _GeneralTabState extends State<GeneralTab> {
   void _clearDefaultSound() {
     setState(() => widget.config.defaultSound = null);
     widget.onChanged();
+  }
+
+  Future<void> _exportConfig() async {
+    final jsonStr = const JsonEncoder.withIndent('  ').convert(widget.config.toJson());
+    try {
+      final savedPath = await FilePicker.saveFile(
+        dialogTitle: 'Ayarları Dışa Aktar',
+        fileName: 'zil_takip_ayarlari.json',
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+        bytes: utf8.encode(jsonStr),
+      );
+      if (!mounted || savedPath == null) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Ayarlar dışa aktarıldı.')));
+    } catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Dışa aktarılamadı: $exc')));
+    }
+  }
+
+  Future<void> _importConfig() async {
+    final result =
+        await FilePicker.pickFiles(type: FileType.custom, allowedExtensions: ['json']);
+    final path = result?.files.single.path;
+    if (path == null) return;
+
+    Map<String, dynamic> data;
+    try {
+      final content = await File(path).readAsString();
+      data = jsonDecode(content) as Map<String, dynamic>;
+    } catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Dosya okunamadı ya da geçersiz: $exc')));
+      return;
+    }
+
+    if (!mounted) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Ayarları İçe Aktar'),
+        content: const Text(
+            'Bu, mevcut TÜM ayarların (zil kayıtları, namaz vakitleri, tatil günleri, '
+            'sesler) üzerine yazacak. Devam edilsin mi?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('İçe Aktar')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    AppConfig imported;
+    try {
+      imported = AppConfig.fromJson(data);
+    } catch (exc) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Geçersiz ayar dosyası: $exc')));
+      return;
+    }
+    await widget.onImportConfig(imported);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('Ayarlar içe aktarıldı.')));
   }
 
   Future<void> _addHoliday() async {
@@ -220,6 +305,33 @@ class _GeneralTabState extends State<GeneralTab> {
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
+        const SizedBox(height: 24),
+        Text('Ayarları Yedekle / Geri Yükle', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _exportConfig,
+                    icon: const Icon(Icons.upload_file),
+                    label: const Text('Dışa Aktar'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _importConfig,
+                    icon: const Icon(Icons.download_outlined),
+                    label: const Text('İçe Aktar'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
         const SizedBox(height: 24),
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,

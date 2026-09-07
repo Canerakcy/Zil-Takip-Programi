@@ -393,17 +393,27 @@ class RemoteControlService {
   }
 
   /// Eşleşmiş bir cihazın güncel IP'sini yeniden bulur (IP değişmiş olabilir).
+  /// WiFi'de tek bir UDP yayın paketi kaybolabilir (sessizce düşer) - bu
+  /// yüzden tek seferlik gönderim yerine, zaman aşımına kadar periyodik
+  /// olarak tekrar gönderiyoruz (pairWithCode'daki yeniden gönderme
+  /// deseniyle aynı) - aksi halde tek bir kayıp paket "cihaza
+  /// ulaşılamadı" hatasına yol açabiliyordu.
   Future<String?> _locate(PairedDevice peer) async {
     final sock = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0, reuseAddress: true);
     sock.broadcastEnabled = true;
     try {
       final request = {'v': protocolVersion, 'type': 'locate_request', 'token': peer.token};
+      final data = utf8.encode('${jsonEncode(request)}\n');
+      void broadcast() => sock.send(data, InternetAddress('255.255.255.255'), pairingUdpPort);
+
       final completer = Completer<String?>();
       Timer? timeoutTimer;
+      Timer? resendTimer;
       late final StreamSubscription<RawSocketEvent> sub;
 
       void finish(String? result) {
         timeoutTimer?.cancel();
+        resendTimer?.cancel();
         sub.cancel();
         if (!completer.isCompleted) completer.complete(result);
       }
@@ -424,8 +434,8 @@ class RemoteControlService {
         }
       });
 
-      final data = utf8.encode('${jsonEncode(request)}\n');
-      sock.send(data, InternetAddress('255.255.255.255'), pairingUdpPort);
+      broadcast();
+      resendTimer = Timer.periodic(const Duration(seconds: 1), (_) => broadcast());
       timeoutTimer = Timer(const Duration(seconds: locateTimeoutSeconds), () => finish(null));
 
       final result = await completer.future;

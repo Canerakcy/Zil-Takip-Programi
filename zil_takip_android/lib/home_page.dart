@@ -26,6 +26,7 @@ class _HomePageState extends State<HomePage> {
   final List<String> _logLines = [];
   StreamSubscription<Map<String, dynamic>?>? _logSub;
   StreamSubscription<Map<String, dynamic>?>? _pairingRequestSub;
+  StreamSubscription<Map<String, dynamic>?>? _remoteConfigUpdatedSub;
   AudioPlayerService? _testPlayerInstance;
   AudioPlayerService get _testPlayer => _testPlayerInstance ??=
       AudioPlayerService(onError: _showAudioError);
@@ -67,6 +68,20 @@ class _HomePageState extends State<HomePage> {
     } catch (_) {
       // Arka plan servisi bu platformda/ortamda kullanılamıyor olabilir.
     }
+    try {
+      // Bu cihaz başka bir cihaz tarafından uzaktan kontrol edilirken (bkz.
+      // background_service.dart applyRemoteConfig) ekran açık olabilir -
+      // ayarlar değiştiğinde bunu diskten yeniden okuyup canlı olarak
+      // yansıtıyoruz. Bu olmadan hem ekran bayat kalır hem de kullanıcı
+      // burada herhangi bir yerel değişiklik yaparsa uzaktan gelen
+      // değişiklik sessizce üzerine yazılıp kaybolur.
+      _remoteConfigUpdatedSub =
+          FlutterBackgroundService().on('remote_config_updated').listen((_) {
+        _reloadConfig();
+      });
+    } catch (_) {
+      // Arka plan servisi bu platformda/ortamda kullanılamıyor olabilir.
+    }
   }
 
   final Set<String> _shownPairingRequestIds = {};
@@ -103,6 +118,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _logSub?.cancel();
     _pairingRequestSub?.cancel();
+    _remoteConfigUpdatedSub?.cancel();
     _testPlayerInstance?.dispose();
     super.dispose();
   }
@@ -122,6 +138,17 @@ class _HomePageState extends State<HomePage> {
     if (config.defaultSound == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _promptDefaultSound());
     }
+  }
+
+  Future<void> _reloadConfig() async {
+    AppConfig config;
+    try {
+      config = await loadConfig().timeout(const Duration(seconds: 10));
+    } catch (_) {
+      return;
+    }
+    if (!mounted) return;
+    setState(() => _config = config);
   }
 
   Future<void> _promptDefaultSound() async {
@@ -193,6 +220,11 @@ class _HomePageState extends State<HomePage> {
     setState(() {});
   }
 
+  Future<void> _importConfig(AppConfig imported) async {
+    setState(() => _config = imported);
+    await _persist();
+  }
+
   Future<void> _testSound(String? sound) async {
     final config = _config;
     if (config == null) return;
@@ -232,7 +264,12 @@ class _HomePageState extends State<HomePage> {
     final tabs = [
       EntriesTab(config: config, onChanged: _persist, onTest: _testSound),
       PrayerTab(config: config, onChanged: _persist, onTest: _testSound),
-      GeneralTab(config: config, onChanged: _persist, logLines: _logLines),
+      GeneralTab(
+        config: config,
+        onChanged: _persist,
+        logLines: _logLines,
+        onImportConfig: _importConfig,
+      ),
       const RemoteTab(),
     ];
 

@@ -321,7 +321,12 @@ class RemoteControlManager:
 
     def _locate(self, peer: PairedDevice) -> Optional[str]:
         """Eşleşmiş bir cihazın güncel IP'sini yeniden bulur (IP değişmiş
-        olabilir - ör. DHCP kira yenilemesi)."""
+        olabilir - ör. DHCP kira yenilemesi). WiFi'de tek bir UDP yayın
+        paketi kaybolabilir (sessizce düşer) - bu yüzden tek seferlik
+        gönderim yerine, zaman aşımına kadar periyodik olarak tekrar
+        gönderiyoruz (pair_with_code'daki yeniden gönderme deseniyle
+        aynı) - aksi halde tek bir kayıp paket "cihaza ulaşılamadı"
+        hatasına yol açabiliyordu."""
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -331,7 +336,11 @@ class RemoteControlManager:
             request = {"v": PROTOCOL_VERSION, "type": "locate_request", "token": peer.token}
             deadline = time.time() + LOCATE_TIMEOUT_SECONDS
             _send_udp_broadcast(sock, request)
+            last_broadcast = time.time()
             while time.time() < deadline:
+                if time.time() - last_broadcast > 1.0:
+                    _send_udp_broadcast(sock, request)
+                    last_broadcast = time.time()
                 try:
                     data, addr = sock.recvfrom(4096)
                 except socket.timeout:

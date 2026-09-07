@@ -1,6 +1,7 @@
 """Ceselsan Zil Takip Programı - Ana pencere (Tkinter arayüzü)."""
 from __future__ import annotations
 
+import json
 import os
 import queue
 import subprocess
@@ -17,8 +18,8 @@ import audio_player
 import autostart
 import prayer_service
 import remote_control
-from config_store import (VAKIT_KEYS, load_config, load_paired_devices_raw,
-                           save_config, save_paired_devices_raw)
+from config_store import (VAKIT_KEYS, complete_config, load_config,
+                           load_paired_devices_raw, save_config, save_paired_devices_raw)
 from scheduler import BellScheduler
 from single_instance import SingleInstance
 
@@ -816,6 +817,50 @@ class ConfigTabsMixin:
         self.cfg["fire_button_sound"] = None
         self._persist()
 
+    # ---------- Ayarları dışa/içe aktarma (yedekleme/geri yükleme) ----------
+    def _export_config(self) -> None:
+        path = filedialog.asksaveasfilename(
+            title="Ayarları Dışa Aktar", defaultextension=".json",
+            filetypes=[("JSON dosyası", "*.json"), ("Tüm dosyalar", "*.*")])
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self.cfg, f, ensure_ascii=False, indent=2)
+        except OSError as exc:
+            messagebox.showerror(APP_TITLE, f"Dışa aktarılamadı: {exc}")
+            return
+        self._log(f"Ayarlar dışa aktarıldı: {path}")
+        messagebox.showinfo(APP_TITLE, "Ayarlar başarıyla dışa aktarıldı.")
+
+    def _import_config(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Ayarları İçe Aktar",
+            filetypes=[("JSON dosyası", "*.json"), ("Tüm dosyalar", "*.*")])
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError) as exc:
+            messagebox.showerror(APP_TITLE, f"Dosya okunamadı ya da geçersiz: {exc}")
+            return
+        if not isinstance(data, dict):
+            messagebox.showerror(APP_TITLE, "Geçersiz ayar dosyası.")
+            return
+        if not messagebox.askyesno(
+                APP_TITLE,
+                "Bu, mevcut TÜM ayarların (zil kayıtları, namaz vakitleri, tatil "
+                "günleri, sesler) üzerine yazacak. Devam edilsin mi?"):
+            return
+        # complete_config(), içe aktarılan dosya eksik/elle düzenlenmiş olsa
+        # bile (ör. eski bir sürümden) her alanın var olduğunu garanti eder -
+        # aksi halde sekmeler yeniden kurulurken KeyError ile çöker.
+        self.cfg = complete_config(data)
+        self._persist()
+        self._rebuild_all_tabs()
+        self._log(f"Ayarlar içe aktarıldı: {path}")
+
     # ---------- Genel sekmesi: tatil günleri ----------
     def _refresh_holidays_tree(self) -> None:
         self.holidays_tree.delete(*self.holidays_tree.get_children())
@@ -970,6 +1015,16 @@ class RemoteSettingsWindow(tk.Toplevel, ConfigTabsMixin):
             foreground="#666666", wraplength=820, justify="left").pack(
             anchor="w", padx=10, pady=(12, 8))
 
+        backup_frame = ttk.LabelFrame(frame, text="Ayarları Yedekle / Geri Yükle")
+        backup_frame.pack(fill="x", padx=10, pady=(0, 8))
+        backup_btn_frame = ttk.Frame(backup_frame)
+        backup_btn_frame.pack(fill="x", padx=8, pady=8)
+        ttk.Button(backup_btn_frame, text="📤 Dışa Aktar (bu cihazın ayarlarını kaydet)",
+                   command=self._export_config).pack(side="left", padx=4)
+        ttk.Button(backup_btn_frame,
+                   text=f"📥 İçe Aktar ('{self.peer.name}' cihazına gönder)",
+                   command=self._import_config).pack(side="left", padx=4)
+
         holidays_frame = ttk.LabelFrame(
             frame, text="Tatil Günleri (normal program bu tarihlerde çalmaz)")
         holidays_frame.pack(fill="both", expand=True, padx=10, pady=8)
@@ -1001,6 +1056,19 @@ class RemoteSettingsWindow(tk.Toplevel, ConfigTabsMixin):
     # ---------- Yerel yerine ağ üzerinden kaydet/çal/logla ----------
     def _persist(self) -> None:
         threading.Thread(target=self._push_worker, daemon=True).start()
+
+    def _rebuild_all_tabs(self) -> None:
+        """_import_config() sonrası self.cfg TAMAMEN değiştiği için (ör.
+        farklı bir cihazdan/eski bir yedekten), önceden kurulmuş ağaç ve
+        alan widget'ları artık eski veriyi gösterir - App._rebuild_all_tabs
+        ile aynı desen: sekme içeriklerini yıkıp yeniden kur."""
+        for tab in (self.entries_tab, self.prayer_tab, self.audio_tab, self.general_tab):
+            for child in tab.winfo_children():
+                child.destroy()
+        self._build_entries_tab()
+        self._build_prayer_tab()
+        self._build_audio_tab()
+        self._build_general_tab()
 
     def _push_worker(self) -> None:
         try:
@@ -1443,6 +1511,47 @@ class App(tk.Tk):
         self.cfg["fire_button_sound"] = None
         self._persist()
 
+    # ---------- Ayarları dışa/içe aktarma (yedekleme/geri yükleme) ----------
+    def _export_config(self) -> None:
+        path = filedialog.asksaveasfilename(
+            title="Ayarları Dışa Aktar", defaultextension=".json",
+            filetypes=[("JSON dosyası", "*.json"), ("Tüm dosyalar", "*.*")])
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self.cfg, f, ensure_ascii=False, indent=2)
+        except OSError as exc:
+            messagebox.showerror(APP_TITLE, f"Dışa aktarılamadı: {exc}")
+            return
+        self._log(f"Ayarlar dışa aktarıldı: {path}")
+        messagebox.showinfo(APP_TITLE, "Ayarlar başarıyla dışa aktarıldı.")
+
+    def _import_config(self) -> None:
+        path = filedialog.askopenfilename(
+            title="Ayarları İçe Aktar",
+            filetypes=[("JSON dosyası", "*.json"), ("Tüm dosyalar", "*.*")])
+        if not path:
+            return
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError) as exc:
+            messagebox.showerror(APP_TITLE, f"Dosya okunamadı ya da geçersiz: {exc}")
+            return
+        if not isinstance(data, dict):
+            messagebox.showerror(APP_TITLE, "Geçersiz ayar dosyası.")
+            return
+        if not messagebox.askyesno(
+                APP_TITLE,
+                "Bu, mevcut TÜM ayarların (zil kayıtları, namaz vakitleri, tatil "
+                "günleri, sesler) üzerine yazacak. Devam edilsin mi?"):
+            return
+        self.cfg = complete_config(data)
+        self._persist()
+        self._rebuild_all_tabs()
+        self._log(f"Ayarlar içe aktarıldı: {path}")
+
     def _build_general_tab(self) -> None:
         frame = self.general_tab
 
@@ -1475,6 +1584,15 @@ class App(tk.Tk):
         ttk.Label(log_row, text="Zil kayıtları ayrıca dosyaya da yazılır.").pack(side="left")
         ttk.Button(log_row, text="📁 Log Klasörünü Aç", command=self._open_log_folder).pack(
             side="left", padx=8)
+
+        backup_frame = ttk.LabelFrame(frame, text="Ayarları Yedekle / Geri Yükle")
+        backup_frame.pack(fill="x", padx=10, pady=(0, 8))
+        backup_btn_frame = ttk.Frame(backup_frame)
+        backup_btn_frame.pack(fill="x", padx=8, pady=8)
+        ttk.Button(backup_btn_frame, text="📤 Dışa Aktar", command=self._export_config).pack(
+            side="left", padx=4)
+        ttk.Button(backup_btn_frame, text="📥 İçe Aktar", command=self._import_config).pack(
+            side="left", padx=4)
 
         holidays_frame = ttk.LabelFrame(
             frame, text="Tatil Günleri (normal program bu tarihlerde çalmaz)")
@@ -1675,7 +1793,6 @@ class App(tk.Tk):
             # Uzak cihaz eksik/kısmi bir config göndermiş olabilir (ör.
             # eski/farklı bir sürüm) - complete_config() ile tamamlanmazsa
             # sekmeler kurulurken KeyError ile çöker.
-            from config_store import complete_config
             remote_cfg = complete_config(dict(result.get("data") or {}))
             try:
                 self.after(0, lambda: RemoteSettingsWindow(self, peer, remote_cfg,
@@ -1721,7 +1838,7 @@ class App(tk.Tk):
 
     def _apply_remote_config(self, new_cfg: dict) -> None:
         def do_apply() -> None:
-            from config_store import complete_config, default_config
+            from config_store import default_config
             merged = default_config()
             merged.update(new_cfg)
             # complete_config(), uzak taraf eksik/kısmi bir ayar gönderse

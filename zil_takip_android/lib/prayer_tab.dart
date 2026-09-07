@@ -42,6 +42,20 @@ class _PrayerTabState extends State<PrayerTab> {
   }
 
   @override
+  void didUpdateWidget(covariant PrayerTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // widget.config sadece uzaktan gelen bir ayar değişikliğiyle diskten
+    // yeniden okunduğunda (HomePage._reloadConfig) yeni bir nesneyle
+    // değiştirilir - yerel düzenlemelerde aynı nesne mutasyona uğrar. Bu
+    // yüzden referans farkı, "şehir/ülke metin kutuları bayat kaldı, uzaktan
+    // gelen değeri yansıtmalıyız" sinyali olarak güvenle kullanılabilir.
+    if (!identical(oldWidget.config, widget.config)) {
+      _cityController.text = _pt.city;
+      _countryController.text = _pt.country;
+    }
+  }
+
+  @override
   void dispose() {
     _cityController.dispose();
     _countryController.dispose();

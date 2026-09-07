@@ -82,6 +82,11 @@ class _RemoteSettingsPageState extends State<RemoteSettingsPage> {
     _push();
   }
 
+  Future<void> _importConfig(AppConfig imported) async {
+    setState(() => _config = imported);
+    await _push();
+  }
+
   Future<void> _onTest(String? sound) async {
     try {
       final result = await _bridge
@@ -145,7 +150,8 @@ class _RemoteSettingsPageState extends State<RemoteSettingsPage> {
                         config: config,
                         onChanged: _onChanged,
                         logLines: const [],
-                        isRemote: true),
+                        isRemote: true,
+                        onImportConfig: _importConfig),
                   ],
                 ),
       bottomNavigationBar: config == null

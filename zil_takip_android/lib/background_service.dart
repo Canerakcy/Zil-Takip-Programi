@@ -234,6 +234,14 @@ Future<void> _setUpRemoteControl(
     getConfig: () async => (await loadConfig()).toJson(),
     applyRemoteConfig: (newCfgJson) async {
       await saveConfig(AppConfig.fromJson(newCfgJson));
+      // Uygulama açıksa (UI ana isolate'te çalışıyorsa) ekranındaki ayarlar
+      // artık diskteki güncel değerle eşleşmiyor - yeniden okunmazsa hem
+      // kullanıcı değişikliği canlı görmez hem de bir sonraki yerel
+      // düzenlemede eski (bayat) ayar diske geri yazılıp uzaktan gelen
+      // değişikliği sessizce siler. Bu yüzden UI'ye "yeniden yükle" sinyali
+      // gönderiyoruz (Windows'ta App._apply_remote_config zaten sekmeleri
+      // anında yeniden kuruyor - burada aynı canlı yansımayı sağlıyoruz).
+      service.invoke('remote_config_updated');
     },
     ringNow: (sound) async {
       final config = await loadConfig();
