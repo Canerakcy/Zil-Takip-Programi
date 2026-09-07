@@ -606,9 +606,12 @@ class ConfigTabsMixin:
             ttk.Button(daily_frame, text="📁 Seç", width=7,
                        command=lambda v=vakit: self._choose_daily_sound(v)).grid(
                 row=i, column=3, padx=2, pady=3)
+            ttk.Button(daily_frame, text="❌", width=3,
+                       command=lambda v=vakit: self._clear_daily_sound(v)).grid(
+                row=i, column=4, padx=2, pady=3)
             ttk.Button(daily_frame, text="▶ Test", width=6,
                        command=lambda v=vakit: self._test_daily_sound(v)).grid(
-                row=i, column=4, padx=(2, 8), pady=3)
+                row=i, column=5, padx=(2, 8), pady=3)
 
             self.daily_vars[vakit] = {"enabled": enabled_var, "sound": sound_var}
 
@@ -677,6 +680,10 @@ class ConfigTabsMixin:
         if not path:
             return
         self.daily_vars[vakit]["sound"].set(path)
+        self._save_daily_setting(vakit)
+
+    def _clear_daily_sound(self, vakit: str) -> None:
+        self.daily_vars[vakit]["sound"].set("")
         self._save_daily_setting(vakit)
 
     def _test_daily_sound(self, vakit: str) -> None:
@@ -783,6 +790,11 @@ class ConfigTabsMixin:
             self.cfg["default_sound"] = path
             self._persist()
 
+    def _clear_default_sound(self) -> None:
+        self.default_sound_var.set("(Seçilmedi - lütfen bir ses dosyası seçin)")
+        self.cfg["default_sound"] = None
+        self._persist()
+
     def _save_volume(self) -> None:
         self.cfg["volume"] = self.volume_var.get() / 100.0
         self._persist()
@@ -798,6 +810,11 @@ class ConfigTabsMixin:
             self.fire_button_sound_var.set(path)
             self.cfg["fire_button_sound"] = path
             self._persist()
+
+    def _clear_fire_button_sound(self) -> None:
+        self.fire_button_sound_var.set("(Seçilmedi - varsayılan zil sesi çalınır)")
+        self.cfg["fire_button_sound"] = None
+        self._persist()
 
     # ---------- Genel sekmesi: tatil günleri ----------
     def _refresh_holidays_tree(self) -> None:
@@ -915,6 +932,8 @@ class RemoteSettingsWindow(tk.Toplevel, ConfigTabsMixin):
             row=0, column=1, sticky="we", **pad)
         ttk.Button(frame, text="📁 Seç...", command=self._choose_default_sound).grid(
             row=0, column=2, sticky="w", **pad)
+        ttk.Button(frame, text="❌ Kaldır", command=self._clear_default_sound).grid(
+            row=0, column=3, sticky="w", **pad)
 
         ttk.Label(frame, text="Ses seviyesi:").grid(row=1, column=0, sticky="w", **pad)
         self.volume_var = tk.DoubleVar(value=self.cfg.get("volume", 1.0) * 100)
@@ -936,6 +955,8 @@ class RemoteSettingsWindow(tk.Toplevel, ConfigTabsMixin):
             row=4, column=1, sticky="we", **pad)
         ttk.Button(frame, text="📁 Seç...", command=self._choose_fire_button_sound).grid(
             row=4, column=2, sticky="w", **pad)
+        ttk.Button(frame, text="❌ Kaldır", command=self._clear_fire_button_sound).grid(
+            row=4, column=3, sticky="w", **pad)
 
         frame.columnconfigure(1, weight=1)
 
@@ -1297,9 +1318,12 @@ class App(tk.Tk):
             ttk.Button(daily_frame, text="📁 Seç", width=7,
                        command=lambda v=vakit: self._choose_daily_sound(v)).grid(
                 row=i, column=3, padx=2, pady=3)
+            ttk.Button(daily_frame, text="❌", width=3,
+                       command=lambda v=vakit: self._clear_daily_sound(v)).grid(
+                row=i, column=4, padx=2, pady=3)
             ttk.Button(daily_frame, text="▶ Test", width=6,
                        command=lambda v=vakit: self._test_daily_sound(v)).grid(
-                row=i, column=4, padx=(2, 8), pady=3)
+                row=i, column=5, padx=(2, 8), pady=3)
 
             self.daily_vars[vakit] = {"enabled": enabled_var, "sound": sound_var}
 
@@ -1377,6 +1401,8 @@ class App(tk.Tk):
             row=1, column=1, sticky="we", **pad)
         ttk.Button(frame, text="📁 Seç...", command=self._choose_default_sound).grid(
             row=1, column=2, sticky="w", **pad)
+        ttk.Button(frame, text="❌ Kaldır", command=self._clear_default_sound).grid(
+            row=1, column=3, sticky="w", **pad)
 
         ttk.Label(frame, text="Ses seviyesi:").grid(row=2, column=0, sticky="w", **pad)
         self.volume_var = tk.DoubleVar(value=self.cfg.get("volume", 1.0) * 100)
@@ -1398,6 +1424,8 @@ class App(tk.Tk):
             row=5, column=1, sticky="we", **pad)
         ttk.Button(frame, text="📁 Seç...", command=self._choose_fire_button_sound).grid(
             row=5, column=2, sticky="w", **pad)
+        ttk.Button(frame, text="❌ Kaldır", command=self._clear_fire_button_sound).grid(
+            row=5, column=3, sticky="w", **pad)
 
         frame.columnconfigure(1, weight=1)
 
@@ -1409,6 +1437,11 @@ class App(tk.Tk):
             self.fire_button_sound_var.set(path)
             self.cfg["fire_button_sound"] = path
             self._persist()
+
+    def _clear_fire_button_sound(self) -> None:
+        self.fire_button_sound_var.set("(Seçilmedi - varsayılan zil sesi çalınır)")
+        self.cfg["fire_button_sound"] = None
+        self._persist()
 
     def _build_general_tab(self) -> None:
         frame = self.general_tab
@@ -1529,6 +1562,8 @@ class App(tk.Tk):
         pdev_btn_frame.pack(fill="x", padx=8, pady=(0, 8))
         ttk.Button(pdev_btn_frame, text="🔔 Zili Çal", command=self._remote_ring_selected).pack(
             side="left", padx=4)
+        ttk.Button(pdev_btn_frame, text="🔥 Yangın Butonu",
+                   command=self._remote_fire_button_selected).pack(side="left", padx=4)
         ttk.Button(pdev_btn_frame, text="⏹ Durdur", command=self._remote_stop_selected).pack(
             side="left", padx=4)
         ttk.Button(pdev_btn_frame, text="⚙️ Ayarları Görüntüle/Değiştir",
@@ -1596,6 +1631,13 @@ class App(tk.Tk):
             return
         self._run_remote_command(peer, {"cmd": "ring_now", "sound": None},
                                   success_message="Uzak cihazda zil çaldırıldı.")
+
+    def _remote_fire_button_selected(self) -> None:
+        peer = self._selected_peer()
+        if peer is None:
+            return
+        self._run_remote_command(peer, {"cmd": "fire_button"},
+                                  success_message="Uzak cihazda yangın butonu tetiklendi.")
 
     def _remote_stop_selected(self) -> None:
         peer = self._selected_peer()
@@ -1820,6 +1862,10 @@ class App(tk.Tk):
         self.daily_vars[vakit]["sound"].set(path)
         self._save_daily_setting(vakit)
 
+    def _clear_daily_sound(self, vakit: str) -> None:
+        self.daily_vars[vakit]["sound"].set("")
+        self._save_daily_setting(vakit)
+
     def _test_daily_sound(self, vakit: str) -> None:
         sound = self.daily_vars[vakit]["sound"].get().strip() or "default"
         self._play_test_sound(sound)
@@ -1938,6 +1984,11 @@ class App(tk.Tk):
             self.default_sound_var.set(path)
             self.cfg["default_sound"] = path
             self._persist()
+
+    def _clear_default_sound(self) -> None:
+        self.default_sound_var.set("(Seçilmedi - lütfen bir ses dosyası seçin)")
+        self.cfg["default_sound"] = None
+        self._persist()
 
     def _save_volume(self) -> None:
         self.cfg["volume"] = self.volume_var.get() / 100.0

@@ -143,6 +143,18 @@ class _RemoteTabState extends State<RemoteTab> {
     }
   }
 
+  Future<void> _fireButtonDevice(PairedDevice peer) async {
+    try {
+      final result = await _bridge.send(peer.peerId, {'cmd': 'fire_button'});
+      if (!mounted) return;
+      _showSnack(result['ok'] == true
+          ? "'${peer.name}' cihazında yangın butonu tetiklendi."
+          : "'${peer.name}' reddetti: ${result['error']}");
+    } catch (exc) {
+      if (mounted) _showSnack("'${peer.name}' cihazına ulaşılamadı: $exc");
+    }
+  }
+
   Future<void> _stopDevice(PairedDevice peer) async {
     try {
       final result = await _bridge.send(peer.peerId, {'cmd': 'stop'});
@@ -280,6 +292,11 @@ class _RemoteTabState extends State<RemoteTab> {
                     icon: const Icon(Icons.notifications_active),
                     tooltip: 'Zili Çal',
                     onPressed: () => _ringDevice(peer),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.local_fire_department, color: Colors.red),
+                    tooltip: 'Yangın Butonu',
+                    onPressed: () => _fireButtonDevice(peer),
                   ),
                   IconButton(
                     icon: const Icon(Icons.stop_circle_outlined),

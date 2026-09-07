@@ -526,6 +526,15 @@ class RemoteControlService {
           await ringNow(msg['sound'] as String?);
           onLog("'${peer.name}' zili şimdi çaldırdı (uzaktan müdahale).");
           return {'ok': true};
+        case 'fire_button':
+          // 'ring_now' (sound=null) bu cihazın VARSAYILAN sesini çalar -
+          // yangın butonuna özel sesi değil. Karşı cihazın kendi
+          // fire_button_sound'unu okuyup çalıyoruz, tıpkı o cihazda
+          // fiziksel yangın butonuna basılmış gibi.
+          final cfg = await getConfig();
+          await ringNow(cfg['fire_button_sound'] as String?);
+          onLog("'${peer.name}' yangın butonunu uzaktan tetikledi.");
+          return {'ok': true};
         case 'stop':
           await stopRinging();
           return {'ok': true};

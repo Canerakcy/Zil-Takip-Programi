@@ -75,6 +75,10 @@ class _BellEntryDialogState extends State<_BellEntryDialog> {
     if (path != null) setState(() => _sound = path);
   }
 
+  void _clearSound() {
+    setState(() => _sound = null);
+  }
+
   String get _timeText =>
       '${_time.hour.toString().padLeft(2, '0')}:${_time.minute.toString().padLeft(2, '0')}';
 
@@ -140,7 +144,18 @@ class _BellEntryDialogState extends State<_BellEntryDialog> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Ses'),
               subtitle: Text(soundDisplayName(_sound)),
-              trailing: const Icon(Icons.audiotrack),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_sound != null && _sound!.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.clear),
+                      tooltip: 'Kaldır',
+                      onPressed: _clearSound,
+                    ),
+                  const Icon(Icons.audiotrack),
+                ],
+              ),
               onTap: _pickSound,
             ),
             SwitchListTile(
@@ -210,6 +225,10 @@ class _FridayOffsetDialogState extends State<_FridayOffsetDialog> {
     if (path != null) setState(() => _sound = path);
   }
 
+  void _clearSound() {
+    setState(() => _sound = null);
+  }
+
   void _save() {
     final minutes = int.tryParse(_minutesController.text.trim());
     if (minutes == null || minutes <= 0) return;
@@ -262,7 +281,18 @@ class _FridayOffsetDialogState extends State<_FridayOffsetDialog> {
               contentPadding: EdgeInsets.zero,
               title: const Text('Ses'),
               subtitle: Text(soundDisplayName(_sound)),
-              trailing: const Icon(Icons.audiotrack),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_sound != null && _sound!.isNotEmpty)
+                    IconButton(
+                      icon: const Icon(Icons.clear),
+                      tooltip: 'Kaldır',
+                      onPressed: _clearSound,
+                    ),
+                  const Icon(Icons.audiotrack),
+                ],
+              ),
               onTap: _pickSound,
             ),
             SwitchListTile(
@@ -353,6 +383,10 @@ class _HolidayDialogState extends State<_HolidayDialog> {
     if (path != null) setState(() => _ringSound = path);
   }
 
+  void _clearRingSound() {
+    setState(() => _ringSound = null);
+  }
+
   String get _ringTimeText =>
       '${_ringTime.hour.toString().padLeft(2, '0')}:${_ringTime.minute.toString().padLeft(2, '0')}';
 
@@ -423,7 +457,18 @@ class _HolidayDialogState extends State<_HolidayDialog> {
                 contentPadding: EdgeInsets.zero,
                 title: const Text('Ses'),
                 subtitle: Text(soundDisplayName(_ringSound)),
-                trailing: const Icon(Icons.audiotrack),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_ringSound != null && _ringSound!.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.clear),
+                        tooltip: 'Kaldır',
+                        onPressed: _clearRingSound,
+                      ),
+                    const Icon(Icons.audiotrack),
+                  ],
+                ),
                 onTap: _pickRingSound,
               ),
             ],

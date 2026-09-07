@@ -71,6 +71,11 @@ class _GeneralTabState extends State<GeneralTab> {
     widget.onChanged();
   }
 
+  void _clearDefaultSound() {
+    setState(() => widget.config.defaultSound = null);
+    widget.onChanged();
+  }
+
   Future<void> _addHoliday() async {
     final holiday = await showHolidayDialog(context);
     if (holiday == null) return;
@@ -95,6 +100,11 @@ class _GeneralTabState extends State<GeneralTab> {
     final path = await pickSoundFile();
     if (path == null) return;
     setState(() => widget.config.fireButtonSound = path);
+    widget.onChanged();
+  }
+
+  void _clearFireButtonSound() {
+    setState(() => widget.config.fireButtonSound = null);
     widget.onChanged();
   }
 
@@ -128,7 +138,18 @@ class _GeneralTabState extends State<GeneralTab> {
               ListTile(
                 title: const Text('Varsayılan Ses'),
                 subtitle: Text(soundDisplayName(config.defaultSound)),
-                trailing: const Icon(Icons.audiotrack),
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (config.defaultSound != null && config.defaultSound!.isNotEmpty)
+                      IconButton(
+                        icon: const Icon(Icons.clear),
+                        tooltip: 'Kaldır',
+                        onPressed: _clearDefaultSound,
+                      ),
+                    const Icon(Icons.audiotrack),
+                  ],
+                ),
                 onTap: _pickDefaultSound,
               ),
               Padding(
@@ -240,7 +261,18 @@ class _GeneralTabState extends State<GeneralTab> {
             leading: const Icon(Icons.local_fire_department, color: Colors.red),
             title: const Text('Yangın Butonu Sesi'),
             subtitle: Text(soundDisplayName(config.fireButtonSound)),
-            trailing: const Icon(Icons.audiotrack),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (config.fireButtonSound != null && config.fireButtonSound!.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.clear),
+                    tooltip: 'Kaldır',
+                    onPressed: _clearFireButtonSound,
+                  ),
+                const Icon(Icons.audiotrack),
+              ],
+            ),
             onTap: _pickFireButtonSound,
           ),
         ),

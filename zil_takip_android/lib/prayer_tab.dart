@@ -101,6 +101,11 @@ class _PrayerTabState extends State<PrayerTab> {
     widget.onChanged();
   }
 
+  void _clearVakitSound(String vakit) {
+    setState(() => _pt.daily[vakit]!.sound = null);
+    widget.onChanged();
+  }
+
   Future<void> _addFridayOffset() async {
     final offset = await showFridayOffsetDialog(context);
     if (offset == null) return;
@@ -228,6 +233,13 @@ class _PrayerTabState extends State<PrayerTab> {
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      if (_pt.daily[vakit]!.sound != null &&
+                          _pt.daily[vakit]!.sound!.isNotEmpty)
+                        IconButton(
+                          icon: const Icon(Icons.clear),
+                          tooltip: 'Kaldır',
+                          onPressed: () => _clearVakitSound(vakit),
+                        ),
                       IconButton(
                         icon: const Icon(Icons.audiotrack),
                         tooltip: 'Ses Seç',

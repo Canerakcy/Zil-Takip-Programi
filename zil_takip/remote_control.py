@@ -436,6 +436,16 @@ class RemoteControlManager:
                 self._ring_now(msg.get("sound"))
                 self._on_log(f"'{peer.name}' zili şimdi çaldırdı (uzaktan müdahale).")
                 return {"ok": True}
+            if cmd == "fire_button":
+                # "Zili Çal" (ring_now, sound=None) bu cihazın VARSAYILAN
+                # sesini çalar - yangın butonuna özel sesi değil. Bu yüzden
+                # ayrı bir komut: karşı cihazın kendi fire_button_sound'unu
+                # okuyup onu çalıyoruz, tıpkı o cihazda fiziksel yangın
+                # butonuna basılmış gibi.
+                cfg = self._get_config()
+                self._ring_now(cfg.get("fire_button_sound") or None)
+                self._on_log(f"'{peer.name}' yangın butonunu uzaktan tetikledi.")
+                return {"ok": True}
             if cmd == "stop":
                 self._stop_ringing()
                 return {"ok": True}
