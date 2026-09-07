@@ -25,8 +25,13 @@ class _HomePageState extends State<HomePage> {
   final List<String> _logLines = [];
   StreamSubscription<Map<String, dynamic>?>? _logSub;
   AudioPlayerService? _testPlayerInstance;
-  AudioPlayerService get _testPlayer =>
-      _testPlayerInstance ??= AudioPlayerService();
+  AudioPlayerService get _testPlayer => _testPlayerInstance ??=
+      AudioPlayerService(onError: _showAudioError);
+
+  void _showAudioError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
 
   @override
   void initState() {
