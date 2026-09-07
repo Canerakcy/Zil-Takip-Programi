@@ -110,20 +110,11 @@ def default_config() -> dict[str, Any]:
     }
 
 
-def load_config() -> dict[str, Any]:
-    path = get_config_path()
-    if not path.exists():
-        cfg = default_config()
-        save_config(cfg)
-        return cfg
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            cfg = json.load(f)
-    except (json.JSONDecodeError, OSError):
-        cfg = default_config()
-        save_config(cfg)
-        return cfg
-
+def complete_config(cfg: dict[str, Any]) -> dict[str, Any]:
+    """Eksik/kısmi bir config dict'ini varsayılanlarla tamamlar. Hem diskten
+    okurken (eski sürüm göçü) hem de uzaktan gelen bir ayar (set_config)
+    uygulanırken kullanılır - böylece eksik/hatalı alanlar içeren bir uzak
+    config, arayüzü (ör. namaz vakitleri sekmesini) çökertmez."""
     # Eksik alanları varsayılanlarla tamamla (ileriye dönük uyumluluk için).
     # "prayer_times" burada KASITLI olarak atlanır - aşağıdaki göç bloğu onu
     # eski sürümlerdeki il/ilçe bilgisini koruyarak kendi kurar.
@@ -193,11 +184,37 @@ def load_config() -> dict[str, Any]:
         pt["daily"] = daily
         pt["friday_offsets"] = friday_offsets
 
+    # Yukarıdaki göç bloğu yalnızca "daily"/"friday_offsets" HİÇ yoksa
+    # çalışır - ama ör. uzaktan gönderilen bir config'de "daily" var olup
+    # içinde bazı vakitler eksik olabilir (elle düzenleme, eski/farklı
+    # şema vb.). Böyle bir eksik, _build_prayer_tab()'ı KeyError ile
+    # çökertirdi - bu yüzden her vakit anahtarı burada ayrıca garanti edilir.
+    daily = pt.setdefault("daily", {})
+    for vakit in VAKIT_KEYS:
+        daily.setdefault(vakit, default_daily_vakit())
+    pt.setdefault("friday_offsets", [])
+
     # Artık kullanılmayan eski alanlar temizlenir.
     for stale_key in ("vakitler", "sela", "cuma_sela", "alerts",
                        "gorsel_sonrasi_sesli", "kerahat_hatirlat", "temkin_suresi_dk"):
         pt.pop(stale_key, None)
     return cfg
+
+
+def load_config() -> dict[str, Any]:
+    path = get_config_path()
+    if not path.exists():
+        cfg = default_config()
+        save_config(cfg)
+        return cfg
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            cfg = json.load(f)
+    except (json.JSONDecodeError, OSError):
+        cfg = default_config()
+        save_config(cfg)
+        return cfg
+    return complete_config(cfg)
 
 
 def save_config(cfg: dict[str, Any]) -> None:

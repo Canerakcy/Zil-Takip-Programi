@@ -429,6 +429,21 @@ class App(tk.Tk):
         if self._instance is not None:
             self.after(200, self._poll_instance_queue)
 
+        # _build_ui() (aşağıda) "Uzaktan Erişim" sekmesini de kurar ve bu,
+        # self.remote_control.paired_devices'a erişir - bu yüzden
+        # RemoteControlManager _build_ui()'dan ÖNCE oluşturulmalıdır.
+        self.remote_control = remote_control.RemoteControlManager(
+            get_config=lambda: self.cfg,
+            apply_remote_config=self._apply_remote_config,
+            ring_now=self._remote_ring_now,
+            stop_ringing=audio_player.stop,
+            on_pairing_request=self._on_remote_pairing_request,
+            on_log=self._log,
+            on_devices_changed=self._save_paired_devices,
+            initial_paired_devices=[remote_control.PairedDevice.from_json(d)
+                                     for d in load_paired_devices_raw()],
+        )
+
         self._build_ui()
         self._refresh_entries_tree()
         self._refresh_friday_tree()
@@ -445,17 +460,6 @@ class App(tk.Tk):
         self.scheduler = BellScheduler(get_config=lambda: self.cfg, on_log=self._log)
         self.scheduler.start()
 
-        self.remote_control = remote_control.RemoteControlManager(
-            get_config=lambda: self.cfg,
-            apply_remote_config=self._apply_remote_config,
-            ring_now=self._remote_ring_now,
-            stop_ringing=audio_player.stop,
-            on_pairing_request=self._on_remote_pairing_request,
-            on_log=self._log,
-            on_devices_changed=self._save_paired_devices,
-            initial_paired_devices=[remote_control.PairedDevice.from_json(d)
-                                     for d in load_paired_devices_raw()],
-        )
         try:
             self.remote_control.start()
         except OSError as exc:
@@ -1054,10 +1058,13 @@ class App(tk.Tk):
 
     def _apply_remote_config(self, new_cfg: dict) -> None:
         def do_apply() -> None:
-            from config_store import default_config
+            from config_store import complete_config, default_config
             merged = default_config()
             merged.update(new_cfg)
-            self.cfg = merged
+            # complete_config(), uzak taraf eksik/kısmi bir ayar gönderse
+            # bile (ör. elle düzenlenmiş JSON) her alanın var olduğunu
+            # garanti eder - aksi halde sekmeler yeniden kurulurken çöker.
+            self.cfg = complete_config(merged)
             save_config(self.cfg)
             self._rebuild_all_tabs()
             self._log("Ayarlar uzaktan güncellendi.")
