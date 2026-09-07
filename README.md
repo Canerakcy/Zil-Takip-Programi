@@ -205,10 +205,15 @@ pyinstaller zil_takip.spec --noconfirm --clean
   şüpheli işaretlenme ihtimalini azaltmak için derleme UPX sıkıştırması
   kullanmaz ve exe'ye gerçek yayıncı/sürüm bilgisi (Ceselsan) gömülür.
 - **Windows 7 desteklenir** (derleme, Windows 7'yi destekleyen son Python
-  sürümü olan 3.8 ile yapılır). Eski/güncellenmemiş bir Windows 7'de
-  uygulama "ucrtbase.dll bulunamadı" gibi bir hatayla açılmazsa, Microsoft'un
-  ücretsiz **Visual C++ 2015-2022 Redistributable (x86)**'ını kurun -
-  [aka.ms/vs/17/release/vc_redist.x86.exe](https://aka.ms/vs/17/release/vc_redist.x86.exe) -
+  sürümü olan 3.8 ile yapılır) - **ama derleme 64-bit'tir**, bu yüzden
+  yalnızca 64-bit Windows 7'de çalışır (32-bit Windows 7'de hiç açılmaz).
+  Eski/güncellenmemiş bir Windows 7'de uygulama "python38.dll bulunamadı",
+  "ucrtbase.dll bulunamadı" veya "api-ms-win-crt-runtime-l1-1-0.dll
+  eksik" gibi bir hatayla açılmazsa, Microsoft'un ücretsiz **Visual C++
+  2015-2022 Redistributable (x64)**'ını kurun -
+  [aka.ms/vs/17/release/vc_redist.x64.exe](https://aka.ms/vs/17/release/vc_redist.x64.exe) -
   bu, Windows 7'de fabrika ayarlarıyla bulunmayan ama modern Python
   programlarının ihtiyaç duyduğu "Universal C Runtime" bileşenini kurar.
-  (64-bit Windows 7 kullanıyorsanız `vc_redist.x64.exe` sürümünü kurun.)
+  **Dikkat**: x86 (32-bit) sürümünü kurmak bu hatayı ÇÖZMEZ - mutlaka
+  x64 sürümünü kurun. Kurduktan sonra bilgisayarı yeniden başlatmanız
+  gerekebilir.
