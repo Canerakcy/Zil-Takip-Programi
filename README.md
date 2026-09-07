@@ -41,10 +41,12 @@ bildirim çubuğunda sürekli bir "Ceselsan Zil Takip arka planda çalışıyor"
 bildirimi görünür, bu normaldir ve kapatılmamalıdır (kapatılırsa Android
 servisi durdurabilir).
 
-**👉 [Releases sayfasından en güncel `android-v*` etiketli sürümü indirin](https://github.com/Canerakcy/Zil-Takip-Programi/releases)**
+**👉 [CeselsanZilTakip.apk indir](https://github.com/Canerakcy/Zil-Takip-Programi/releases/download/android-latest/CeselsanZilTakip.apk)**
 (`.apk` dosyasını telefona indirip açtığınızda "bilinmeyen kaynaklardan
 yükleme"ye izin vermeniz istenebilir - Play Store dışından kurulum
-yaptığınız için bu normaldir.)
+yaptığınız için bu normaldir.) Bu link, .exe indirme linki gibi her
+zaman en güncel derlemeyi verir - ayrıca [Releases sayfasında](https://github.com/Canerakcy/Zil-Takip-Programi/releases)
+eski sürümlerin listesine de ulaşabilirsiniz.
 
 **AUX/kulaklık jakı ile hoparlöre bağlama:** Ekstra bir ayar gerekmez -
 telefonu kabloyla (jack/aux) bir hoparlöre bağladığınızda Android sesi

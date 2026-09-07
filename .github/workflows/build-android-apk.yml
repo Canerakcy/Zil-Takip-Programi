@@ -56,11 +56,14 @@ jobs:
       - name: APK oluştur (release)
         run: flutter build apk --release --build-name=1.0.${{ github.run_number }} --build-number=${{ github.run_number }}
 
+      - name: APK'yı adlandır
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/CeselsanZilTakip.apk
+
       - name: APK'yı yükle (Actions Artifacts)
         uses: actions/upload-artifact@v4
         with:
           name: CeselsanZilTakip-android-apk
-          path: zil_takip_android/build/app/outputs/flutter-apk/app-release.apk
+          path: zil_takip_android/build/app/outputs/flutter-apk/CeselsanZilTakip.apk
           if-no-files-found: error
 
       - name: GitHub Release oluştur (her derleme yeni bir sürüm)
@@ -69,4 +72,18 @@ jobs:
           tag_name: ${{ steps.version.outputs.tag }}
           name: "Ceselsan Zil Takip Android ${{ steps.version.outputs.tag }}"
           make_latest: false
-          files: zil_takip_android/build/app/outputs/flutter-apk/app-release.apk
+          files: zil_takip_android/build/app/outputs/flutter-apk/CeselsanZilTakip.apk
+
+      # exe'deki "releases/latest/download/..." linkiyle aynı deneyimi
+      # Android için de sağlamak üzere, sabit "android-latest" etiketli bir
+      # release her derlemede güncellenir - böylece README'deki link hiç
+      # değişmeden her zaman en güncel APK'yı verir. Windows exe'nin
+      # "gerçek" latest release bayrağını (make_latest: true) elinde
+      # tutmasını bozmamak için bu release'de make_latest kullanılmaz.
+      - name: "Sabit \"en güncel\" indirme linkini güncelle"
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-latest
+          name: "Ceselsan Zil Takip Android - En Güncel Sürüm"
+          make_latest: false
+          files: zil_takip_android/build/app/outputs/flutter-apk/CeselsanZilTakip.apk
