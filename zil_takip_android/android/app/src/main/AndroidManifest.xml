@@ -15,7 +15,7 @@
          servis/receiver bildirimleri flutter_background_service eklentisinin
          kendi AndroidManifest.xml'inden derleme sırasında birleştirilir. -->
     <application
-        android:label="zil_takip_android"
+        android:label="Ceselsan Zil Takip"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
