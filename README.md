@@ -30,7 +30,12 @@ bkz. aşağıdaki "Kendi bilgisayarınızda elle derlemek" bölümü.)
 Aynı programın Android (telefon/tablet) karşılığı `zil_takip_android/`
 klasöründedir, Flutter ile yazılmıştır ve Windows sürümüyle aynı
 özellikleri sunar (Zil Programı, Namaz Vakitleri + Cuma Namazı, Genel
-Ayarlar). Ekran kapalıyken/uygulama arka plandayken de çalışabilmesi için
+Ayarlar). **Asgari Android 6.0 (API 23)** gerektirir - bu yüzden derleme
+bilinçli olarak Flutter 3.32.8'e sabitlenmiştir (bkz.
+`.github/workflows/build-android-apk.yml`), çünkü Flutter 3.35 ve
+sonrası artık Android 7.0'ın (API 24) altını desteklemiyor. Flutter
+sürümü ileride yükseltilirse hedef cihazın Android sürümü tekrar
+kontrol edilmelidir. Ekran kapalıyken/uygulama arka plandayken de çalışabilmesi için
 kalıcı bir bildirimle "ön plan servisi" olarak çalışır - bu yüzden
 bildirim çubuğunda sürekli bir "Ceselsan Zil Takip arka planda çalışıyor"
 bildirimi görünür, bu normaldir ve kapatılmamalıdır (kapatılırsa Android

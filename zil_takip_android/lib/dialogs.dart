@@ -7,9 +7,9 @@ import 'package:flutter/material.dart';
 import 'models.dart';
 
 Future<String?> pickSoundFile() async {
-  final files = await FilePicker.pickFiles(type: FileType.audio);
-  if (files.isEmpty) return null;
-  return files.single.path;
+  final result = await FilePicker.pickFiles(type: FileType.audio);
+  if (result == null || result.files.isEmpty) return null;
+  return result.files.single.path;
 }
 
 String soundDisplayName(String? sound) {

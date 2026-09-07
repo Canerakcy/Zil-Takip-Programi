@@ -1,5 +1,6 @@
 plugins {
     id("com.android.application")
+    id("kotlin-android")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
@@ -17,23 +18,23 @@ android {
         isCoreLibraryDesugaringEnabled = true
     }
 
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_17.toString()
+    }
+
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.ceselsan.zil_takip_android"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        // Kullanılacak telefon en az Android 7.0 (API 24) - bu zaten Flutter'ın
-        // bu sürümdeki kendi asgari desteklediği seviye (motor daha eskisini
-        // çalıştırmıyor), o yüzden ekstra bir şey yapmaya gerek yok.
+        // Hedef cihaz Android 6.0.1 (API 23). Bu proje bilinçli olarak Flutter
+        // 3.32.8'e sabitlendi (bkz. .github/workflows/build-android-apk.yml) -
+        // bu sürümün varsayılan minSdk'sı (21) API 23'ü rahatça kapsıyor.
+        // Daha yeni Flutter sürümleri (3.35+) minSdk tabanını 24'e çıkardığı
+        // için bu cihazda motor hiç çalışmıyordu - flutter versiyonunu
+        // yükseltirken bu kısıtlamayı unutmayın.
         minSdk = flutter.minSdkVersion
-        // flutter.targetSdkVersion bu Flutter sürümünde 36 (Android 16) gibi
-        // çok yeni/deneysel bir seviyeye varsayılan oluyor - gerçek cihazlarda
-        // (test cihazımız Android 13/14) uygulamanın açılır açılmaz çökmesine
-        // yol açtı. Android 14 (foreground service türü zorunluluğunun zaten
-        // tanımlı ve iyi test edilmiş olduğu, cihazımızla birebir eşleşen)
-        // sürümüne sabitlendi. compileSdk yine de flutter'ın varsayılanında
-        // kalıyor (bağımlılıkların derleme zamanı ihtiyacı için).
-        targetSdk = 34
+        targetSdk = flutter.targetSdkVersion
         // Uses the version code from pubspec.yaml. When using split APKs, 1000 * ABI_VERSION
         // is added automatically by Flutter. (https://developer.android.com/studio/build/configure-apk-splits#configure-APK-versions)
         // You can force using the value of versionCode by specifying the `-P force-version-code-ignoring-abi=true`
@@ -48,12 +49,6 @@ android {
             // Signing with the debug keys for now, so `flutter run --release` works.
             signingConfig = signingConfigs.getByName("debug")
         }
-    }
-}
-
-kotlin {
-    compilerOptions {
-        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17
     }
 }
 

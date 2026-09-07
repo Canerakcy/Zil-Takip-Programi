@@ -19,7 +19,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.13.2
+  sdk: ">=3.0.0 <4.0.0"
 
 # Dependencies specify other packages that your package needs in order to work.
 # To automatically upgrade your package dependencies to the latest versions
@@ -46,7 +46,7 @@ dependencies:
   # Zil sesi çalmak için.
   audioplayers: ^6.5.1
   # Kullanıcının kendi ses dosyasını seçebilmesi için.
-  file_picker: ^12.2.0
+  file_picker: ^11.0.3
   # Bildirim/tam zamanlı alarm izinleri (Android 13+).
   permission_handler: ^12.0.1
   # Kayıtlar için benzersiz kimlik üretimi.
