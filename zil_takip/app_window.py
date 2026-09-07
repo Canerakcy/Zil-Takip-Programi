@@ -9,7 +9,7 @@ import sys
 import threading
 import tkinter as tk
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from tkinter import filedialog, messagebox, ttk
 from typing import Callable, Optional
 
@@ -18,6 +18,7 @@ import audio_player
 import autostart
 import prayer_service
 import remote_control
+import ring_history
 from config_store import (VAKIT_KEYS, complete_config, load_config,
                            load_paired_devices_raw, save_config, save_paired_devices_raw)
 from scheduler import BellScheduler
@@ -39,6 +40,16 @@ ROW_ODD = "#e9efec"
 ROW_EVEN = "#ffffff"
 FONT = ("Segoe UI", 10)
 FONT_BOLD = ("Segoe UI", 10, "bold")
+
+RING_KIND_LABELS = {
+    "entry": "Zil Programı",
+    "prayer": "Namaz Vakti",
+    "friday": "Cuma Namazı",
+    "holiday": "Tatil Günü",
+    "fire_button": "Yangın Butonu",
+    "remote": "Uzaktan Zil",
+    "remote_fire_button": "Uzaktan Yangın Butonu",
+}
 
 
 def format_days(days: list[int]) -> str:
@@ -1208,18 +1219,26 @@ class App(tk.Tk):
         self.prayer_tab = ttk.Frame(notebook)
         self.audio_tab = ttk.Frame(notebook)
         self.general_tab = ttk.Frame(notebook)
+        self.stats_tab = ttk.Frame(notebook)
         self.remote_tab = ttk.Frame(notebook)
         notebook.add(self.entries_tab, text="🔔 Zil Programı")
         notebook.add(self.prayer_tab, text="🕌 Namaz Vakitleri")
         notebook.add(self.audio_tab, text="🔊 Ses Ayarları")
         notebook.add(self.general_tab, text="⚙️ Genel")
+        notebook.add(self.stats_tab, text="📊 İstatistikler")
         notebook.add(self.remote_tab, text="🔗 Uzaktan Erişim")
 
         self._build_entries_tab()
         self._build_prayer_tab()
         self._build_audio_tab()
         self._build_general_tab()
+        self._build_stats_tab()
         self._build_remote_tab()
+
+        # İstatistikler sekmesine her geçildiğinde tazele - sürekli
+        # zamanlayıcıyla değil, yalnızca gerçekten görüntülenirken diskten
+        # okunur.
+        notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
         log_frame = ttk.LabelFrame(self, text="📋 Kayıtlar")
         log_frame.pack(fill="both", expand=False, padx=10, pady=(0, 10))
@@ -1301,8 +1320,98 @@ class App(tk.Tk):
             audio_player.play_file(sound, self.cfg.get("output_device"),
                                     self.cfg.get("default_sound"), self.cfg.get("volume", 1.0))
             self._log("Zil çalıyor: Yangın Butonu")
+            ring_history.record_ring("Yangın Butonu", "fire_button")
         except Exception as exc:
             messagebox.showerror(APP_TITLE, f"Ses çalınamadı: {exc}")
+            ring_history.record_ring("Yangın Butonu", "fire_button", success=False,
+                                      error=str(exc))
+
+    # ---------- İstatistikler sekmesi ----------
+    def _on_tab_changed(self, _event=None) -> None:
+        try:
+            current = self.notebook.select()
+            if current and self.notebook.nametowidget(current) is self.stats_tab:
+                self._refresh_stats()
+        except tk.TclError:
+            pass
+
+    def _build_stats_tab(self) -> None:
+        frame = self.stats_tab
+
+        cards_frame = ttk.Frame(frame)
+        cards_frame.pack(fill="x", padx=10, pady=10)
+        self.stats_today_var = tk.StringVar(value="0")
+        self.stats_week_var = tk.StringVar(value="0")
+        self.stats_month_var = tk.StringVar(value="0")
+        for i, (title, var) in enumerate((
+                ("Bugün", self.stats_today_var),
+                ("Bu Hafta", self.stats_week_var),
+                ("Bu Ay", self.stats_month_var))):
+            card = ttk.LabelFrame(cards_frame, text=f"{title} Çalan Zil Sayısı")
+            card.grid(row=0, column=i, padx=8, sticky="we")
+            ttk.Label(card, textvariable=var, font=("Segoe UI", 24, "bold"),
+                      foreground=ACCENT_DARK).pack(padx=24, pady=12)
+        cards_frame.columnconfigure(0, weight=1)
+        cards_frame.columnconfigure(1, weight=1)
+        cards_frame.columnconfigure(2, weight=1)
+
+        ttk.Button(frame, text="🔄 Yenile", command=self._refresh_stats).pack(
+            anchor="w", padx=10, pady=(0, 8))
+
+        history_frame = ttk.LabelFrame(frame, text="Son Zil Kayıtları (en yeniden en eskiye)")
+        history_frame.pack(fill="both", expand=True, padx=10, pady=(0, 10))
+        columns = ("time", "label", "kind", "status")
+        self.stats_tree = ttk.Treeview(history_frame, columns=columns, show="headings",
+                                        height=14)
+        headers = {"time": "Tarih/Saat", "label": "Etiket", "kind": "Tür", "status": "Durum"}
+        widths = {"time": 150, "label": 260, "kind": 150, "status": 200}
+        for col in columns:
+            self.stats_tree.heading(col, text=headers[col])
+            self.stats_tree.column(col, width=widths[col], anchor="w")
+        self.stats_tree.tag_configure("oddrow", background=ROW_ODD)
+        self.stats_tree.tag_configure("evenrow", background=ROW_EVEN)
+        self.stats_tree.tag_configure("failed", foreground="#b3261e")
+        self.stats_tree.pack(fill="both", expand=True, padx=8, pady=8)
+
+        self._refresh_stats()
+
+    def _refresh_stats(self) -> None:
+        entries = ring_history.load_history()
+        today = date.today()
+        week_start = today - timedelta(days=today.weekday())
+        month_start = today.replace(day=1)
+
+        today_count = week_count = month_count = 0
+        parsed: list[tuple[datetime, dict]] = []
+        for entry in entries:
+            try:
+                t = datetime.fromisoformat(entry["time"])
+            except (KeyError, ValueError, TypeError):
+                continue
+            parsed.append((t, entry))
+            d = t.date()
+            if d == today:
+                today_count += 1
+            if d >= week_start:
+                week_count += 1
+            if d >= month_start:
+                month_count += 1
+
+        self.stats_today_var.set(str(today_count))
+        self.stats_week_var.set(str(week_count))
+        self.stats_month_var.set(str(month_count))
+
+        self.stats_tree.delete(*self.stats_tree.get_children())
+        parsed.sort(key=lambda pair: pair[0], reverse=True)
+        for i, (t, entry) in enumerate(parsed[:300]):
+            tag = "evenrow" if i % 2 == 0 else "oddrow"
+            success = entry.get("success", True)
+            tags = (tag,) if success else (tag, "failed")
+            status = "✅ Çaldı" if success else f"❌ Hata: {entry.get('error', 'bilinmiyor')}"
+            kind = entry.get("kind", "")
+            self.stats_tree.insert("", "end", tags=tags, values=(
+                t.strftime("%d.%m.%Y %H:%M:%S"), entry.get("label", ""),
+                RING_KIND_LABELS.get(kind, kind), status))
 
     def _update_clock(self) -> None:
         now = datetime.now()
@@ -1571,13 +1680,22 @@ class App(tk.Tk):
             value=autostart.is_enabled() if autostart.is_supported()
             else self.cfg.get("start_with_windows", False))
         autostart_check = ttk.Checkbutton(
-            autostart_row, text="Windows açılışında otomatik başlat",
+            autostart_row, text="Windows açılışında otomatik başlat ve kapanırsa kendini "
+                                 "yeniden aç",
             variable=self.autostart_var, command=self._save_autostart_setting)
         autostart_check.pack(side="left")
         if not autostart.is_supported():
             autostart_check.state(["disabled"])
             ttk.Label(autostart_row, text="(Sadece Windows'ta kullanılabilir)",
                       foreground="#666666").pack(side="left", padx=8)
+        ttk.Label(
+            frame, text="Açıksa: bilgisayar açıldığında program otomatik başlar VE bilgisayar "
+                        "çalışır durumdayken program herhangi bir sebeple kapanırsa (çökme, "
+                        "yanlışlıkla kapatma vb.) en geç 1 dakika içinde kendini yeniden açar. "
+                        "Bilgisayarın kendisi kapatılırsa/fişi çekilirse bu tabii ki geçerli "
+                        "değildir - bilgisayar tekrar açıldığında program yine otomatik başlar.",
+            foreground="#666666", wraplength=820, justify="left").pack(
+            anchor="w", padx=30, pady=(2, 0))
 
         log_row = ttk.Frame(frame)
         log_row.pack(anchor="w", padx=10, pady=(4, 12), fill="x")

@@ -13,6 +13,7 @@ import 'config_store.dart';
 import 'models.dart';
 import 'prayer_service.dart';
 import 'remote_control.dart';
+import 'ring_history.dart';
 
 const String notificationChannelId = 'zil_takip_foreground';
 const String notificationChannelName = 'Ceselsan Zil Takip - Arka Plan Servisi';
@@ -138,9 +139,13 @@ void onServiceStart(ServiceInstance service) async {
           final fireKey = 'holiday:$todayStr';
           if (!firedToday.contains(fireKey)) {
             firedToday.add(fireKey);
-            log('Zil çalıyor: ${holiday.label.isNotEmpty ? holiday.label : 'Özel tatil zili'}');
-            await audioPlayer.playFile(
+            final holidayLabel =
+                holiday.label.isNotEmpty ? holiday.label : 'Özel tatil zili';
+            log('Zil çalıyor: $holidayLabel');
+            final played = await audioPlayer.playFile(
                 holiday.ringSound, config.defaultSound, config.volume);
+            await recordRing(holidayLabel, 'holiday',
+                success: played, error: played ? null : 'Çalınacak ses yok');
           }
         }
         return;
@@ -158,7 +163,9 @@ void onServiceStart(ServiceInstance service) async {
         if (firedToday.contains(fireKey)) continue;
         firedToday.add(fireKey);
         log('Zil çalıyor: ${entry.label}');
-        await audioPlayer.playFile(entry.sound, config.defaultSound, config.volume);
+        final played = await audioPlayer.playFile(entry.sound, config.defaultSound, config.volume);
+        await recordRing(entry.label, 'entry',
+            success: played, error: played ? null : 'Çalınacak ses yok');
       }
 
       final pt = config.prayerTimes;
@@ -179,9 +186,12 @@ void onServiceStart(ServiceInstance service) async {
             final fireKey = 'daily:$vakit:$todayStr';
             if (firedToday.contains(fireKey)) continue;
             firedToday.add(fireKey);
-            log('Zil çalıyor: ${vakitLabels[vakit]}');
-            await audioPlayer.playFile(
+            final vakitLabel = vakitLabels[vakit] ?? vakit;
+            log('Zil çalıyor: $vakitLabel');
+            final played = await audioPlayer.playFile(
                 setting.sound, config.defaultSound, config.volume);
+            await recordRing(vakitLabel, 'prayer',
+                success: played, error: played ? null : 'Çalınacak ses yok');
           }
 
           // weekday: Pazartesi=0 ... Cuma=4 (yukarıdaki dönüşümle).
@@ -202,8 +212,10 @@ void onServiceStart(ServiceInstance service) async {
                     ? offset.label
                     : 'Cuma Namazı - ${offset.minutes} dk $directionText';
                 log('Zil çalıyor: $label');
-                await audioPlayer.playFile(
+                final played = await audioPlayer.playFile(
                     offset.sound, config.defaultSound, config.volume);
+                await recordRing(label, 'friday',
+                    success: played, error: played ? null : 'Çalınacak ses yok');
               }
             }
           }

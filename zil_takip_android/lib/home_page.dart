@@ -12,6 +12,8 @@ import 'models.dart';
 import 'prayer_tab.dart';
 import 'entries_tab.dart';
 import 'remote_tab.dart';
+import 'ring_history.dart';
+import 'stats_tab.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -244,6 +246,8 @@ class _HomePageState extends State<HomePage> {
     if (config == null) return;
     final played = await _testPlayer.playFile(
         config.fireButtonSound, config.defaultSound, config.volume);
+    await recordRing('Yangın Butonu', 'fire_button',
+        success: played, error: played ? null : 'Çalınacak ses yok');
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(played
@@ -270,6 +274,7 @@ class _HomePageState extends State<HomePage> {
         logLines: _logLines,
         onImportConfig: _importConfig,
       ),
+      const StatsTab(),
       const RemoteTab(),
     ];
 
@@ -292,6 +297,7 @@ class _HomePageState extends State<HomePage> {
           NavigationDestination(icon: Icon(Icons.notifications_active), label: 'Zil Programı'),
           NavigationDestination(icon: Icon(Icons.mosque), label: 'Namaz Vakitleri'),
           NavigationDestination(icon: Icon(Icons.settings), label: 'Genel'),
+          NavigationDestination(icon: Icon(Icons.bar_chart), label: 'İstatistikler'),
           NavigationDestination(icon: Icon(Icons.wifi_tethering), label: 'Uzaktan Erişim'),
         ],
       ),

@@ -28,6 +28,8 @@ import uuid
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
+import ring_history
+
 PAIRING_UDP_PORT = 47601
 CONTROL_TCP_PORT = 47602
 PROTOCOL_VERSION = 1
@@ -444,6 +446,7 @@ class RemoteControlManager:
             if cmd == "ring_now":
                 self._ring_now(msg.get("sound"))
                 self._on_log(f"'{peer.name}' zili şimdi çaldırdı (uzaktan müdahale).")
+                ring_history.record_ring(f"Uzaktan Zil ('{peer.name}')", "remote")
                 return {"ok": True}
             if cmd == "fire_button":
                 # "Zili Çal" (ring_now, sound=None) bu cihazın VARSAYILAN
@@ -454,6 +457,8 @@ class RemoteControlManager:
                 cfg = self._get_config()
                 self._ring_now(cfg.get("fire_button_sound") or None)
                 self._on_log(f"'{peer.name}' yangın butonunu uzaktan tetikledi.")
+                ring_history.record_ring(f"Uzaktan Yangın Butonu ('{peer.name}')",
+                                          "remote_fire_button")
                 return {"ok": True}
             if cmd == "stop":
                 self._stop_ringing()

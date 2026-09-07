@@ -22,6 +22,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
+import 'ring_history.dart';
+
 const int pairingUdpPort = 47601;
 const int controlTcpPort = 47602;
 const int protocolVersion = 1;
@@ -535,6 +537,7 @@ class RemoteControlService {
         case 'ring_now':
           await ringNow(msg['sound'] as String?);
           onLog("'${peer.name}' zili şimdi çaldırdı (uzaktan müdahale).");
+          await recordRing("Uzaktan Zil ('${peer.name}')", 'remote');
           return {'ok': true};
         case 'fire_button':
           // 'ring_now' (sound=null) bu cihazın VARSAYILAN sesini çalar -
@@ -544,6 +547,7 @@ class RemoteControlService {
           final cfg = await getConfig();
           await ringNow(cfg['fire_button_sound'] as String?);
           onLog("'${peer.name}' yangın butonunu uzaktan tetikledi.");
+          await recordRing("Uzaktan Yangın Butonu ('${peer.name}')", 'remote_fire_button');
           return {'ok': true};
         case 'stop':
           await stopRinging();

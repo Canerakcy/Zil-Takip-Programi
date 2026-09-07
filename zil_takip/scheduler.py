@@ -9,6 +9,7 @@ from typing import Callable, Optional
 
 import audio_player
 import prayer_service
+import ring_history
 
 CHECK_INTERVAL_SECONDS = 5
 
@@ -72,7 +73,8 @@ class BellScheduler(threading.Thread):
                 fire_key = f"holiday:{today.isoformat()}"
                 if fire_key not in self._fired_today:
                     self._fired_today.add(fire_key)
-                    self._ring(label or "Özel tatil zili", holiday.get("ring_sound"), cfg)
+                    self._ring(label or "Özel tatil zili", holiday.get("ring_sound"), cfg,
+                                "holiday")
             return
         weekday = now.weekday()  # Pazartesi=0 ... Pazar=6
 
@@ -87,7 +89,7 @@ class BellScheduler(threading.Thread):
             if fire_key in self._fired_today:
                 continue
             self._fired_today.add(fire_key)
-            self._ring(entry.get("label", "Zil"), entry.get("sound"), cfg)
+            self._ring(entry.get("label", "Zil"), entry.get("sound"), cfg, "entry")
 
         self._check_prayer_times(cfg, today, current_hhmm, weekday)
 
@@ -139,7 +141,7 @@ class BellScheduler(threading.Thread):
                 continue
             self._fired_today.add(fire_key)
             label = prayer_service.VAKIT_LABELS.get(vakit, vakit)
-            self._ring(label, setting.get("sound"), cfg)
+            self._ring(label, setting.get("sound"), cfg, "prayer")
 
         # Cuma namazına özel önce/sonra kayıtları - sadece Cuma günleri,
         # öğle/Cuma vaktine göre hesaplanır.
@@ -163,12 +165,14 @@ class BellScheduler(threading.Thread):
             self._fired_today.add(fire_key)
             direction_text = "kala" if direction == "before" else "sonra"
             label = offset.get("label") or f"Cuma Namazı - {minutes} dk {direction_text}"
-            self._ring(label, offset.get("sound"), cfg)
+            self._ring(label, offset.get("sound"), cfg, "friday")
 
-    def _ring(self, label: str, sound: Optional[str], cfg: dict) -> None:
+    def _ring(self, label: str, sound: Optional[str], cfg: dict, kind: str) -> None:
         self._on_log(f"Zil çalıyor: {label}")
         try:
             audio_player.play_file(sound, cfg.get("output_device"),
                                     cfg.get("default_sound"), cfg.get("volume", 1.0))
+            ring_history.record_ring(label, kind, success=True)
         except Exception as exc:
             self._on_log(f"Ses çalınamadı ({label}): {exc}")
+            ring_history.record_ring(label, kind, success=False, error=str(exc))
