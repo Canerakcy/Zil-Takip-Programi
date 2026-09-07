@@ -7,15 +7,17 @@ class AudioPlayerService {
   final AudioPlayer _player = AudioPlayer();
 
   /// [soundPath] null/boş ya da "default" ise [defaultSound] çalınır.
-  /// İkisi de yoksa hiçbir şey çalmaz (kullanıcı henüz ses seçmemiştir).
-  Future<void> playFile(
+  /// İkisi de yoksa hiçbir şey çalmaz (kullanıcı henüz ses seçmemiştir) ve
+  /// `false` döner - çağıran taraf bunu kullanıcıya bildirebilir.
+  Future<bool> playFile(
       String? soundPath, String? defaultSound, double volume) async {
     final path = (soundPath == null || soundPath.isEmpty || soundPath == 'default')
         ? defaultSound
         : soundPath;
-    if (path == null || path.isEmpty) return;
+    if (path == null || path.isEmpty) return false;
     await _player.setVolume(volume.clamp(0.0, 1.0));
     await _player.play(DeviceFileSource(path));
+    return true;
   }
 
   Future<void> dispose() async {

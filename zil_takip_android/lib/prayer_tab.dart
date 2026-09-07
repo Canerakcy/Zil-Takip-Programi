@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import 'dialogs.dart';
 import 'models.dart';
+import 'prayer_service.dart';
 
 class PrayerTab extends StatefulWidget {
   final AppConfig config;
@@ -26,6 +27,10 @@ class _PrayerTabState extends State<PrayerTab> {
   late final TextEditingController _cityController;
   late final TextEditingController _countryController;
 
+  Map<String, String>? _timings;
+  bool _loadingTimings = false;
+  String? _timingsStatus;
+
   PrayerTimesConfig get _pt => widget.config.prayerTimes;
 
   @override
@@ -33,6 +38,7 @@ class _PrayerTabState extends State<PrayerTab> {
     super.initState();
     _cityController = TextEditingController(text: _pt.city);
     _countryController = TextEditingController(text: _pt.country);
+    if (_pt.city.trim().isNotEmpty) _fetchTimings();
   }
 
   @override
@@ -42,10 +48,50 @@ class _PrayerTabState extends State<PrayerTab> {
     super.dispose();
   }
 
+  Future<void> _fetchTimings() async {
+    final city = _pt.city.trim();
+    final country = _pt.country.trim();
+    if (city.isEmpty) {
+      setState(() {
+        _timings = null;
+        _timingsStatus = 'Önce bir şehir girin.';
+      });
+      return;
+    }
+    setState(() {
+      _loadingTimings = true;
+      _timingsStatus = null;
+    });
+    try {
+      final (timings, fromNetwork) =
+          await getCachedOrFetchDay(city, country, DateTime.now());
+      if (!mounted) return;
+      setState(() {
+        _timings = timings;
+        _loadingTimings = false;
+        _timingsStatus = timings == null
+            ? '$city için vakitler alınamadı - internet bağlantısını kontrol edin.'
+            : (fromNetwork
+                ? '$city için bugünün vakitleri internetten alındı.'
+                : '$city için önbellekteki vakitler gösteriliyor (internet yok).');
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _timings = null;
+        _loadingTimings = false;
+        _timingsStatus = '$city için vakitler alınamadı - internet bağlantısını kontrol edin.';
+      });
+    }
+  }
+
   void _commitLocation() {
+    final cityChanged = _pt.city != _cityController.text.trim();
+    final countryChanged = _pt.country != _countryController.text.trim();
     _pt.city = _cityController.text.trim();
     _pt.country = _countryController.text.trim();
     widget.onChanged();
+    if (cityChanged || countryChanged) _fetchTimings();
   }
 
   Future<void> _pickVakitSound(String vakit) async {
@@ -98,6 +144,7 @@ class _PrayerTabState extends State<PrayerTab> {
 
   @override
   Widget build(BuildContext context) {
+    final ogle = _timings?['ogle'];
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -130,8 +177,32 @@ class _PrayerTabState extends State<PrayerTab> {
                 onTapOutside: (_) => _commitLocation(),
               ),
             ),
+            IconButton(
+              icon: _loadingTimings
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh),
+              tooltip: 'Bugünün Vakitlerini Göster',
+              onPressed: _loadingTimings
+                  ? null
+                  : () {
+                      _commitLocation();
+                      _fetchTimings();
+                    },
+            ),
           ],
         ),
+        if (_timingsStatus != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              _timingsStatus!,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
         const SizedBox(height: 24),
         Text('Günlük Vakit Sesi', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 8),
@@ -140,7 +211,19 @@ class _PrayerTabState extends State<PrayerTab> {
             children: [
               for (final vakit in vakitKeys)
                 ListTile(
-                  title: Text(vakitLabels[vakit]!),
+                  title: Row(
+                    children: [
+                      Text(vakitLabels[vakit]!),
+                      const SizedBox(width: 8),
+                      Text(
+                        _timings?[vakit] ?? '--:--',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyMedium
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
                   subtitle: Text(soundDisplayName(_pt.daily[vakit]!.sound)),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -180,6 +263,14 @@ class _PrayerTabState extends State<PrayerTab> {
             ),
           ],
         ),
+        if (ogle != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              'Bugün öğle vakti: $ogle - Cuma namazı zilleri bu saate göre hesaplanır.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
         if (_pt.fridayOffsets.isEmpty)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
@@ -198,7 +289,9 @@ class _PrayerTabState extends State<PrayerTab> {
               title: Text(offset.label.isNotEmpty
                   ? offset.label
                   : 'Cuma Namazı - ${offset.minutes} dk ${offset.direction == 'before' ? 'kala' : 'sonra'}'),
-              subtitle: Text(soundDisplayName(offset.sound)),
+              subtitle: Text(ogle != null
+                  ? '${soundDisplayName(offset.sound)} • Çalma saati: ${applyOffsetMinutes(ogle, offset.direction == 'after' ? offset.minutes : -offset.minutes)}'
+                  : soundDisplayName(offset.sound)),
               onTap: () => _editFridayOffset(offset),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,

@@ -6,6 +6,7 @@ import 'package:permission_handler/permission_handler.dart';
 
 import 'audio_player_service.dart';
 import 'config_store.dart';
+import 'dialogs.dart';
 import 'general_tab.dart';
 import 'models.dart';
 import 'prayer_tab.dart';
@@ -65,7 +66,47 @@ class _HomePageState extends State<HomePage> {
       // kalmasın diye varsayılan ayarlarla devam edilir.
       config = AppConfig.createDefault();
     }
-    if (mounted) setState(() => _config = config);
+    if (!mounted) return;
+    setState(() => _config = config);
+    if (config.defaultSound == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _promptDefaultSound());
+    }
+  }
+
+  Future<void> _promptDefaultSound() async {
+    // Windows sürümünde olduğu gibi, ilk açılışta kullanıcıdan bir zil sesi
+    // seçmesi istenir - aksi halde "Test Et" butonlarına basınca hiçbir şey
+    // duyulmaz (çalınacak ses yok) ve bu bir hata gibi görünür.
+    if (!mounted) return;
+    final config = _config;
+    if (config == null || config.defaultSound != null) return;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Varsayılan Zil Sesi Seçin'),
+        content: const Text(
+            'Zillerin çalabilmesi için önce bir ses dosyası (.mp3/.wav vb.) '
+            'seçmeniz gerekiyor. Bu ses, kendi sesi olmayan tüm kayıtlar için '
+            'kullanılır.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Daha Sonra'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final path = await pickSoundFile();
+              if (path == null || !mounted) return;
+              setState(() => config.defaultSound = path);
+              await _persist();
+            },
+            child: const Text('Ses Seç'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _requestNotificationPermission() async {
@@ -104,7 +145,15 @@ class _HomePageState extends State<HomePage> {
   Future<void> _testSound(String? sound) async {
     final config = _config;
     if (config == null) return;
-    await _testPlayer.playFile(sound, config.defaultSound, config.volume);
+    final played =
+        await _testPlayer.playFile(sound, config.defaultSound, config.volume);
+    if (!played && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text(
+            'Çalınacak ses yok - önce bu kayıt için bir ses seçin ya da '
+            'Genel sekmesinden varsayılan sesi ayarlayın.'),
+      ));
+    }
   }
 
   @override

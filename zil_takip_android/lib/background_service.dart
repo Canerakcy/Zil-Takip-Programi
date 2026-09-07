@@ -22,6 +22,27 @@ const int foregroundNotificationId = 888;
 /// bir dakika içinde birkaç kez kontrol edildiği için hiçbir zil kaçmaz.
 const Duration checkInterval = Duration(seconds: 20);
 
+/// Android'de (özellikle pil kısıtlamaları/emülatörler yüzünden) zamanlayıcı
+/// bazen bir dakikadan fazla gecikebilir - tam dakika eşleşmesi (==) o anı
+/// tamamen kaçırıp zili hiç çalmayabilir. Bunun yerine, planlanan saat
+/// geçtikten sonra bu tolerans penceresi içindeyse ve o gün için henüz
+/// çalınmadıysa yine de çalınır ("yakalama" mantığı).
+const Duration dueGraceWindow = Duration(minutes: 3);
+
+/// [scheduledHhmm] "HH:MM" vaktinin, [now] itibarıyla çalınması gerekip
+/// gerekmediğini söyler: vakit geçmiş olmalı ama [dueGraceWindow]'dan daha
+/// eski olmamalı (aksi halde uygulama çok sonra açıldığında geçmişteki tüm
+/// zilleri art arda çalar).
+bool _isDue(String scheduledHhmm, DateTime now) {
+  final parts = scheduledHhmm.split(':');
+  final hour = int.tryParse(parts[0]);
+  final minute = parts.length > 1 ? int.tryParse(parts[1]) : null;
+  if (hour == null || minute == null) return false;
+  final scheduled = DateTime(now.year, now.month, now.day, hour, minute);
+  final diff = now.difference(scheduled);
+  return diff >= Duration.zero && diff <= dueGraceWindow;
+}
+
 /// [autoStartOnBoot], kullanıcının Genel sekmesindeki "Telefon Açılınca
 /// Otomatik Başlat" tercihini (AppConfig.startOnBoot) yansıtır. Bu değer
 /// her configure() çağrısında native tarafta kalıcı olarak saklanır; bu
@@ -102,8 +123,6 @@ void onServiceStart(ServiceInstance service) async {
         return;
       }
 
-      final currentHhmm =
-          '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
       // Dart'ta DateTime.weekday: Pazartesi=1 ... Pazar=7. Python sürümüyle
       // (Pazartesi=0 ... Pazar=6) tutarlı olması için 1 çıkarılır.
       final weekday = now.weekday - 1;
@@ -111,7 +130,7 @@ void onServiceStart(ServiceInstance service) async {
       for (final entry in config.entries) {
         if (!entry.enabled) continue;
         if (!entry.days.contains(weekday)) continue;
-        if (entry.time != currentHhmm) continue;
+        if (!_isDue(entry.time, now)) continue;
         final fireKey = 'entry:${entry.id}:$todayStr';
         if (firedToday.contains(fireKey)) continue;
         firedToday.add(fireKey);
@@ -133,7 +152,7 @@ void onServiceStart(ServiceInstance service) async {
             final setting = pt.daily[vakit];
             if (setting == null || !setting.enabled) continue;
             final baseTime = timings[vakit];
-            if (baseTime == null || baseTime != currentHhmm) continue;
+            if (baseTime == null || !_isDue(baseTime, now)) continue;
             final fireKey = 'daily:$vakit:$todayStr';
             if (firedToday.contains(fireKey)) continue;
             firedToday.add(fireKey);
@@ -151,7 +170,7 @@ void onServiceStart(ServiceInstance service) async {
                 final signedMinutes =
                     offset.direction == 'after' ? offset.minutes : -offset.minutes;
                 final triggerTime = applyOffsetMinutes(ogle, signedMinutes);
-                if (triggerTime != currentHhmm) continue;
+                if (!_isDue(triggerTime, now)) continue;
                 final fireKey = 'friday:${offset.id}:$todayStr';
                 if (firedToday.contains(fireKey)) continue;
                 firedToday.add(fireKey);
