@@ -596,7 +596,7 @@ class ConfigTabsMixin:
 
     # ---------- Zil programı sekmesi ----------
     def _build_entries_tab(self) -> None:
-        frame = self.entries_tab
+        frame = self._make_scrollable(self.entries_tab)
         columns = ("enabled", "label", "time", "days", "sound")
         self.entries_tree = ttk.Treeview(frame, columns=columns, show="headings", height=12)
         headers = {"enabled": "Etkin", "label": "Etiket", "time": "Saat",
@@ -1076,7 +1076,7 @@ class RemoteSettingsWindow(tk.Toplevel, ConfigTabsMixin):
 
     # ---------- Bu pencereye özel: cihaz seçimi olmayan ses sekmesi ----------
     def _build_audio_tab(self) -> None:
-        frame = self.audio_tab
+        frame = self._make_scrollable(self.audio_tab)
         pad = {"padx": 10, "pady": 8}
 
         ttk.Label(frame, text="Çalınacak zil sesi:").grid(row=0, column=0, sticky="w", **pad)
@@ -1116,7 +1116,7 @@ class RemoteSettingsWindow(tk.Toplevel, ConfigTabsMixin):
 
     # ---------- Bu pencereye özel: tepsi/otomatik başlatma olmayan Genel sekmesi ----------
     def _build_general_tab(self) -> None:
-        frame = self.general_tab
+        frame = self._make_scrollable(self.general_tab)
         ttk.Label(
             frame, text="Sistem tepsisi, Windows açılışında otomatik başlatma ve log klasörü "
                        "gibi bu bilgisayara özgü ayarlar burada gösterilmez - bunlar yalnızca "
@@ -1435,7 +1435,7 @@ class App(tk.Tk):
             pass
 
     def _build_stats_tab(self) -> None:
-        frame = self.stats_tab
+        frame = self._make_scrollable(self.stats_tab)
 
         cards_frame = ttk.Frame(frame)
         cards_frame.pack(fill="x", padx=10, pady=10)
@@ -1519,7 +1519,7 @@ class App(tk.Tk):
         self.after(1000, self._update_clock)
 
     def _build_entries_tab(self) -> None:
-        frame = self.entries_tab
+        frame = self._make_scrollable(self.entries_tab)
         columns = ("enabled", "label", "time", "days", "sound")
         self.entries_tree = ttk.Treeview(frame, columns=columns, show="headings", height=12)
         headers = {"enabled": "Etkin", "label": "Etiket", "time": "Saat",
@@ -1658,7 +1658,7 @@ class App(tk.Tk):
             row=1, column=0, columnspan=2, sticky="w", padx=8, pady=(10, 6))
 
     def _build_audio_tab(self) -> None:
-        frame = self.audio_tab
+        frame = self._make_scrollable(self.audio_tab)
         pad = {"padx": 10, "pady": 8}
 
         ttk.Label(frame, text="Çıkış cihazı (hoparlör):").grid(row=0, column=0, sticky="w", **pad)
@@ -1741,7 +1741,7 @@ class App(tk.Tk):
         self._log(f"Ayarlar '{host_name}' cihazından içe aktarıldı.")
 
     def _build_general_tab(self) -> None:
-        frame = self.general_tab
+        frame = self._make_scrollable(self.general_tab)
 
         self.tray_var = tk.BooleanVar(value=self.cfg.get("minimize_to_tray", True))
         tray_check = ttk.Checkbutton(
@@ -1819,7 +1819,7 @@ class App(tk.Tk):
 
     # ---------- Uzaktan erişim sekmesi ----------
     def _build_remote_tab(self) -> None:
-        frame = self.remote_tab
+        frame = self._make_scrollable(self.remote_tab)
         pad = {"padx": 10, "pady": 6}
 
         host_frame = ttk.LabelFrame(frame, text="Bu Cihazı Eşleştir (başka bir cihaz buna bağlansın)")

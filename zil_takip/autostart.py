@@ -6,13 +6,16 @@ Sadece HKCU Run anahtarı yalnızca "oturum açılışında bir kez başlat" sa�
 - program çökerse ya da (yanlışlıkla ya da kasıtlı olarak) Görev
 Yöneticisi'nden sonlandırılırsa bir daha kendiliğinden açılmaz. Bunun için
 ayrıca Görev Zamanlayıcı'da "oturum açılışında başlat + her 1 dakikada bir
-tekrar dene" davranışlı bir görev kaydediyoruz: Görev Zamanlayıcı'nın
-varsayılan "IgnoreNew" çoklu-örnek politikası sayesinde, program zaten
-çalışıyorsa bu 1 dakikalık denemeler hiçbir şey yapmaz; program kapanmışsa
-(ne sebeple olursa olsun) bir sonraki denemede yeniden açılır. Programın
-kendi SingleInstance kilidi (bkz. single_instance.py) ekstra bir güvenlik
-katmanı sağlar - Görev Zamanlayıcı'nın görev takibi bir şekilde şaşırıp
-ikinci bir kopya başlatmaya çalışsa bile, o kopya anında kendini kapatır.
+tekrar dene" davranışlı bir görev kaydediyoruz. schtasks'in basit (XML'siz)
+/create komutu "zaten çalışıyorsa yeni örnek başlatma" politikasını
+doğrudan ayarlamaya izin vermediğinden (ve bu davranış Windows sürümüne
+göre değişebildiğinden), güvenlik programın KENDİSİNE bırakılıyor:
+görev, exe'yi "--watchdog-check" bayrağıyla çalıştırır - main.py bu
+bayrağı görüp uygulama zaten çalışıyorsa (SingleInstance kilidi, bkz.
+single_instance.py) pencereyi öne getirmeden SESSİZCE çıkar, böylece 1
+dakikalık denemeler zaten çalışan programı rahatsız etmez (odağı
+çalmaz); program kapanmışsa (ne sebeple olursa olsun) bir sonraki
+denemede normal şekilde yeniden açılır.
 
 Bu "en iyi çaba" (best-effort) bir mekanizmadır: bilgisayarın kendisi
 kapatılırsa/fişi çekilirse hiçbir yazılım bunu engelleyemez - ama
@@ -73,8 +76,15 @@ def _run_schtasks(args: list[str]) -> None:
 
 
 def _register_watchdog_task(exe_path: str) -> None:
+    # "--watchdog-check": schtasks'in basit (XML'siz) /create komutunda
+    # "zaten çalışıyorsa yeni örnek başlatma" politikasını doğrudan
+    # ayarlamanın bir yolu yok - varsayılan davranış Windows sürümüne göre
+    # değişebilir. Bu yüzden programın KENDİSİ bu bayrağı görürse ve zaten
+    # bir örnek çalışıyorsa, pencereyi öne getirmeden (main.py) sessizce
+    # çıkar - aksi halde her 1 dakikada bir gereksiz yere pencere öne
+    # gelip odağı çalabilirdi.
     _run_schtasks([
-        "/create", "/tn", WATCHDOG_TASK_NAME, "/tr", f'"{exe_path}"',
+        "/create", "/tn", WATCHDOG_TASK_NAME, "/tr", f'"{exe_path}" --watchdog-check',
         "/sc", "onlogon", "/rl", "limited", "/ri", "1", "/du", "9999:59", "/f",
     ])
 
