@@ -290,6 +290,7 @@ class _HomePageState extends State<HomePage> {
         icon: const Icon(Icons.local_fire_department),
         label: const Text('YANGIN'),
       ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _selectedIndex,
         onDestinationSelected: (index) => setState(() => _selectedIndex = index),
