@@ -57,14 +57,12 @@ jobs:
       - name: EXE'yi yükle (Actions Artifacts)
         uses: actions/upload-artifact@v6
         with:
-          name: CeselsanZilTakip-windows-exe
-          path: zil_takip/dist/CeselsanZilTakip.exe
+          name: ZilTakipProgrami-windows-exe
+          path: zil_takip/dist/ZilTakipProgrami.exe
           if-no-files-found: error
 
-      - name: GitHub Release oluştur (her derleme yeni bir sürüm)
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: "Ceselsan Zil Takip Programı ${{ steps.version.outputs.tag }}"
-          make_latest: true
-          files: zil_takip/dist/CeselsanZilTakip.exe
+      # Bu dal, tek bir müşteriye özel markasız (beyaz etiketli) sürümü
+      # barındırır - ana ürünün paylaşılan "en güncel sürüm" GitHub Release
+      # linkini (releases/latest) BOZMAMAK için burada Release oluşturulmaz;
+      # exe yukarıdaki Actions Artifacts adımından elle indirilip teslim
+      # edilir.

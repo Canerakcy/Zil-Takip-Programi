@@ -19,13 +19,13 @@ VSVersionInfo(
         StringTable(
           '040904B0',
           [
-            StringStruct('CompanyName', 'Ceselsan'),
-            StringStruct('FileDescription', 'Ceselsan Zil Takip Programı'),
+            StringStruct('CompanyName', ''),
+            StringStruct('FileDescription', 'Zil Takip Programı'),
             StringStruct('FileVersion', '1.0.0.0'),
-            StringStruct('InternalName', 'CeselsanZilTakip'),
-            StringStruct('LegalCopyright', 'Ceselsan'),
-            StringStruct('OriginalFilename', 'CeselsanZilTakip.exe'),
-            StringStruct('ProductName', 'Ceselsan Zil Takip Programı'),
+            StringStruct('InternalName', 'ZilTakipProgrami'),
+            StringStruct('LegalCopyright', ''),
+            StringStruct('OriginalFilename', 'ZilTakipProgrami.exe'),
+            StringStruct('ProductName', 'Zil Takip Programı'),
             StringStruct('ProductVersion', '1.0.0.0'),
           ],
         )

@@ -26,9 +26,9 @@ from __future__ import annotations
 import subprocess
 import sys
 
-RUN_KEY_NAME = "CeselsanZilTakipProgrami"
+RUN_KEY_NAME = "ZilTakipProgrami"
 RUN_KEY_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
-WATCHDOG_TASK_NAME = "CeselsanZilTakipProgrami_Watchdog"
+WATCHDOG_TASK_NAME = "ZilTakipProgrami_Watchdog"
 
 
 def is_supported() -> bool:

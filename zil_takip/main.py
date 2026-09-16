@@ -1,4 +1,4 @@
-"""Ceselsan Zil Takip Programı - Giriş noktası."""
+"""Zil Takip Programı - Giriş noktası."""
 import sys
 import tkinter as tk
 from tkinter import messagebox
@@ -31,7 +31,7 @@ def main() -> None:
         try:
             root = tk.Tk()
             root.withdraw()
-            messagebox.showerror("Ceselsan Zil Takip Programı",
+            messagebox.showerror("Zil Takip Programı",
                                   f"Uygulama başlatılırken hata oluştu:\n{exc}")
         finally:
             sys.exit(1)

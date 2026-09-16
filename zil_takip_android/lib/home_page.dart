@@ -280,7 +280,7 @@ class _HomePageState extends State<HomePage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('🔔 Ceselsan Zil Takip'),
+        title: const Text('🔔 Zil Takip'),
       ),
       body: IndexedStack(index: _selectedIndex, children: tabs),
       floatingActionButton: FloatingActionButton.extended(

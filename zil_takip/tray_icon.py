@@ -38,9 +38,9 @@ class TrayIcon:
 
     def start(self) -> None:
         self._icon = pystray.Icon(
-            "ceselsan_zil_takip",
+            "zil_takip_programi",
             _create_icon_image(),
-            "Ceselsan Zil Takip Programı",
+            "Zil Takip Programı",
             menu=pystray.Menu(
                 pystray.MenuItem("Göster", lambda: self.commands.put(SHOW), default=True),
                 pystray.MenuItem("Çıkış", lambda: self.commands.put(QUIT)),

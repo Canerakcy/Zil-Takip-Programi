@@ -1,4 +1,4 @@
-"""Ceselsan Zil Takip Programı - Ana pencere (Tkinter arayüzü)."""
+"""Zil Takip Programı - Ana pencere (Tkinter arayüzü)."""
 from __future__ import annotations
 
 import os
@@ -28,7 +28,7 @@ try:
 except Exception:  # pystray/Pillow bulunamazsa tepsi özelliği sessizce devre dışı kalır
     tray_icon = None
 
-APP_TITLE = "Ceselsan Zil Takip Programı"
+APP_TITLE = "Zil Takip Programı"
 DAY_NAMES = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
 DAY_SHORT = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"]
 
@@ -1398,7 +1398,7 @@ class App(tk.Tk):
 
         title_box = ttk.Frame(header, style="Header.TFrame")
         title_box.pack(side="left", padx=18, pady=12)
-        ttk.Label(title_box, text="🔔 Ceselsan Zil Takip Programı",
+        ttk.Label(title_box, text="🔔 Zil Takip Programı",
                   style="HeaderTitle.TLabel").pack(anchor="w")
         ttk.Label(title_box, text="Okul / Kurum Zil ve Namaz Vakti Otomasyonu",
                   style="HeaderSubtitle.TLabel").pack(anchor="w")

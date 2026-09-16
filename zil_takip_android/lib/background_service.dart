@@ -16,7 +16,7 @@ import 'remote_control.dart';
 import 'ring_history.dart';
 
 const String notificationChannelId = 'zil_takip_foreground';
-const String notificationChannelName = 'Ceselsan Zil Takip - Arka Plan Servisi';
+const String notificationChannelName = 'Zil Takip - Arka Plan Servisi';
 const int foregroundNotificationId = 888;
 
 /// Her kontrol arasındaki süre. Windows sürümü 5 saniye kullanıyor; telefonda
@@ -76,7 +76,7 @@ Future<void> initializeBackgroundService({bool autoStartOnBoot = false}) async {
       autoStart: true,
       isForegroundMode: true,
       notificationChannelId: notificationChannelId,
-      initialNotificationTitle: 'Ceselsan Zil Takip',
+      initialNotificationTitle: 'Zil Takip',
       initialNotificationContent: 'Arka planda çalışıyor',
       foregroundServiceNotificationId: foregroundNotificationId,
       autoStartOnBoot: autoStartOnBoot,
@@ -228,7 +228,7 @@ void onServiceStart(ServiceInstance service) async {
 }
 
 const String pairingNotificationChannelId = 'zil_takip_pairing';
-const String pairingNotificationChannelName = 'Ceselsan Zil Takip - Eşleştirme İstekleri';
+const String pairingNotificationChannelName = 'Zil Takip - Eşleştirme İstekleri';
 const int pairingNotificationId = 889;
 
 /// requestId -> onay/red kararını bildiren fonksiyon. Karar UI'dan

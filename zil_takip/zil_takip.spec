@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Ceselsan Zil Takip Programı - PyInstaller yapılandırması
+# Zil Takip Programı - PyInstaller yapılandırması
 # Kullanım (Windows üzerinde): pyinstaller zil_takip.spec
 
 block_cipher = None
@@ -34,7 +34,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='CeselsanZilTakip',
+    name='ZilTakipProgrami',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

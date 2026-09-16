@@ -36,7 +36,7 @@ class ZilTakipApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Ceselsan Zil Takip',
+      title: 'Zil Takip',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: accent),

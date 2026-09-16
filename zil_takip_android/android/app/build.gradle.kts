@@ -6,7 +6,7 @@ plugins {
 }
 
 android {
-    namespace = "com.ceselsan.zil_takip_android"
+    namespace = "com.ziltakip.zil_takip_android"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -24,7 +24,7 @@ android {
 
     defaultConfig {
         // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.ceselsan.zil_takip_android"
+        applicationId = "com.ziltakip.zil_takip_android"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         // Hedef cihaz Android 6.0.1 (API 23). Bu proje bilinçli olarak Flutter

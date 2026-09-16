@@ -1,4 +1,4 @@
-# 🔔 Ceselsan Zil Takip Programı
+# 🔔 Zil Takip Programı
 
 Okul/kurum zil saatlerini otomatik olarak çalan, Windows için masaüstü
 uygulaması. Kaynak kodu `zil_takip/` klasöründedir, Python + Tkinter ile
@@ -6,10 +6,10 @@ yazılmıştır.
 
 ## 📥 İndir
 
-Kuruluma gerek yok, GitHub hesabı da gerekmiyor — aşağıdaki linke
-tıklamanız yeterli:
-
-**👉 [CeselsanZilTakip.exe indir](https://github.com/Canerakcy/Zil-Takip-Programi/releases/latest/download/CeselsanZilTakip.exe)**
+Bu, tek bir kuruma özel derlenmiş bir sürümdür ve genel indirme
+sayfasında/Release listesinde yayınlanmaz. `.exe` dosyasına, bu depodaki
+**Actions** sekmesinden `Windows EXE Derle` iş akışının en son çalışmasını
+açıp **Artifacts** bölümünden (`ZilTakipProgrami-windows-exe`) ulaşabilirsiniz.
 
 ### ⚠️ "Windows bu uygulamayı tanımıyor" uyarısı çıkarsa
 
@@ -37,16 +37,16 @@ sonrası artık Android 7.0'ın (API 24) altını desteklemiyor. Flutter
 sürümü ileride yükseltilirse hedef cihazın Android sürümü tekrar
 kontrol edilmelidir. Ekran kapalıyken/uygulama arka plandayken de çalışabilmesi için
 kalıcı bir bildirimle "ön plan servisi" olarak çalışır - bu yüzden
-bildirim çubuğunda sürekli bir "Ceselsan Zil Takip arka planda çalışıyor"
+bildirim çubuğunda sürekli bir "Zil Takip arka planda çalışıyor"
 bildirimi görünür, bu normaldir ve kapatılmamalıdır (kapatılırsa Android
 servisi durdurabilir).
 
-**👉 [CeselsanZilTakip.apk indir](https://github.com/Canerakcy/Zil-Takip-Programi/releases/download/android-latest/CeselsanZilTakip.apk)**
-(`.apk` dosyasını telefona indirip açtığınızda "bilinmeyen kaynaklardan
-yükleme"ye izin vermeniz istenebilir - Play Store dışından kurulum
-yaptığınız için bu normaldir.) Bu link, .exe indirme linki gibi her
-zaman en güncel derlemeyi verir - ayrıca [Releases sayfasında](https://github.com/Canerakcy/Zil-Takip-Programi/releases)
-eski sürümlerin listesine de ulaşabilirsiniz.
+`.apk` dosyasına, bu depodaki **Actions** sekmesinden `Android APK Derle`
+iş akışının en son çalışmasını açıp **Artifacts** bölümünden
+(`ZilTakipProgrami-android-apk`) ulaşabilirsiniz - bu sürüm de (Windows
+.exe gibi) genel Release listesinde yayınlanmaz. Telefona indirip
+açtığınızda "bilinmeyen kaynaklardan yükleme"ye izin vermeniz istenebilir
+- Play Store dışından kurulum yaptığınız için bu normaldir.
 
 **AUX/kulaklık jakı ile hoparlöre bağlama:** Ekstra bir ayar gerekmez -
 telefonu kabloyla (jack/aux) bir hoparlöre bağladığınızda Android sesi
@@ -61,7 +61,7 @@ servisini durdurup zilleri kesebilir. İzni kaçırdıysanız **Genel**
 sekmesinden "Pil Optimizasyonundan Muaf Tut" satırındaki **Aç**
 butonuyla tekrar açabilirsiniz. Bazı Samsung telefonlarda ayrıca
 **Ayarlar > Pil > Arka Plan Kullanımı Sınırları > Uyku Modundaki
-Uygulamalar** listesinde Ceselsan Zil Takip varsa oradan çıkarmanız
+Uygulamalar** listesinde Zil Takip varsa oradan çıkarmanız
 gerekebilir - üretici bu listeyi uygulama içinden kontrol edilemeyen,
 ayrı bir kısıtlama olarak tutar.
 
@@ -192,8 +192,7 @@ buradan üretilemiyor (PyInstaller çalıştığı işletim sistemine göre
 paketleme yapar). Bunun yerine `.github/workflows/build-windows-exe.yml`
 adında bir **GitHub Actions iş akışı** var: kod her güncellendiğinde
 gerçek bir **Windows sunucusunda** otomatik derleme yapıp sonucu bir
-**GitHub Release**'e ekliyor — böylece yukarıdaki indirme linki her
-zaman en güncel `.exe`'yi verir, GitHub hesabı gerekmez.
+**Actions Artifact** olarak yüklüyor (bkz. yukarıdaki "İndir" bölümü).
 
 ### Kendi bilgisayarınızda (Windows) elle derlemek isterseniz
 
@@ -203,7 +202,7 @@ python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
 pyinstaller zil_takip.spec --noconfirm --clean
-# Sonuç: zil_takip\dist\CeselsanZilTakip.exe
+# Sonuç: zil_takip\dist\ZilTakipProgrami.exe
 ```
 
 ## Notlar
@@ -218,7 +217,7 @@ pyinstaller zil_takip.spec --noconfirm --clean
   yüzden ilk çalıştırmada Windows SmartScreen uyarısı çıkabilir - bkz.
   yukarıdaki "İndir" bölümü. SmartScreen/antivirüs tarafından yanlışlıkla
   şüpheli işaretlenme ihtimalini azaltmak için derleme UPX sıkıştırması
-  kullanmaz ve exe'ye gerçek yayıncı/sürüm bilgisi (Ceselsan) gömülür.
+  kullanmaz ve exe'ye gerçek ürün/sürüm bilgisi gömülür.
 - **Windows 7 desteklenir** (derleme, Windows 7'yi destekleyen son Python
   sürümü olan 3.8 ile yapılır) - **ama derleme 64-bit'tir**, bu yüzden
   yalnızca 64-bit Windows 7'de çalışır (32-bit Windows 7'de hiç açılmaz).
