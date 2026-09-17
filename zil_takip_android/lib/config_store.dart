@@ -54,7 +54,7 @@ Future<void> saveConfig(AppConfig config) async {
 }
 
 /// Bir ses dosyasını uygulamanın kalıcı belgeler klasörü altındaki
-/// "sounds/<benzersiz-klasör>/<orijinal-ad>" konumuna kopyalar ve yeni yolu
+/// "sounds/(benzersiz-klasör)/(orijinal-ad)" konumuna kopyalar ve yeni yolu
 /// döndürür. Her kopya kendi klasörüne konur ki aynı isimli iki farklı
 /// dosya (ör. iki ayrı kayıt için seçilen iki farklı "zil.mp3") birbirinin
 /// üzerine yazılmasın; dosya adı yine de korunur (bkz. dialogs.dart
