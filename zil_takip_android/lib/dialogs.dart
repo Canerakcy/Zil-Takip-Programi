@@ -4,12 +4,31 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import 'config_store.dart';
 import 'models.dart';
 
+/// file_picker, Android'de seçilen dosyayı çoğunlukla uygulamanın ÖNBELLEK
+/// (cache) klasörüne kopyalayıp o geçici yolu döndürür - bu klasör Android
+/// tarafından depolama azaldığında ya da kullanıcı Ayarlar'dan "Önbelleği
+/// Temizle" dediğinde (bu, "Verilerini Temizle"den farklı olarak zararsız
+/// sanılır ve uygulama ayarlarını silmez) OTOMATİK olarak boşaltılabilir.
+/// Bu durumda ses dosyası sessizce kaybolur ve zil çalarken
+/// "setDataSource failed" hatasıyla karşılaşılır. Bunu önlemek için seçilen
+/// dosya hemen uygulamanın KALICI belgeler klasörüne (config_store.dart -
+/// copySoundToPersistentStorage) kopyalanır ve o kalıcı yol kullanılır.
 Future<String?> pickSoundFile() async {
   final result = await FilePicker.pickFiles(type: FileType.audio);
   if (result == null || result.files.isEmpty) return null;
-  return result.files.single.path;
+  final picked = result.files.single;
+  final pickedPath = picked.path;
+  if (pickedPath == null) return null;
+  try {
+    return await copySoundToPersistentStorage(pickedPath, picked.name);
+  } catch (_) {
+    // Kopyalama başarısız olursa (ör. disk dolu) en azından seçim
+    // kaybolmasın diye orijinal (geçici olabilecek) yol kullanılır.
+    return pickedPath;
+  }
 }
 
 String soundDisplayName(String? sound) {
