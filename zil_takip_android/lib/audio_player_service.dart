@@ -9,6 +9,7 @@ class AudioPlayerService {
   final AudioPlayer _player = AudioPlayer();
   StreamSubscription<void>? _eventSub;
   late final Future<void> _contextReady;
+  final void Function(String message)? _onError;
 
   /// Ses dosyası native tarafta (ör. cihazın medya çözücüsü) oynatılamazsa
   /// bu hata yalnızca olay kanalı (event channel) üzerinden asenkron olarak
@@ -28,7 +29,8 @@ class AudioPlayerService {
   /// yok, zil her koşulda çalmalı) - bu yüzden focus isteği tamamen
   /// devre dışı bırakılıyor (AndroidAudioFocus.none); bu da yukarıdaki
   /// sessiz başarısızlık ihtimalini kökten ortadan kaldırıyor.
-  AudioPlayerService({void Function(String message)? onError}) {
+  AudioPlayerService({void Function(String message)? onError})
+      : _onError = onError {
     _contextReady = _player.setAudioContext(
       AudioContext(
         android: const AudioContextAndroid(
@@ -49,6 +51,15 @@ class AudioPlayerService {
   /// [soundPath] null/boş ya da "default" ise [defaultSound] çalınır.
   /// İkisi de yoksa hiçbir şey çalmaz (kullanıcı henüz ses seçmemiştir) ve
   /// `false` döner - çağıran taraf bunu kullanıcıya bildirebilir.
+  ///
+  /// Dosya artık diskte yoksa/bozuksa (ör. seçilen dosya silinmiş, önbellek
+  /// temizlenmiş), native taraf setDataSource'ta senkron bir
+  /// PlatformException fırlatabilir - bu, yukarıdaki eventStream'den farklı
+  /// olarak burada, play() çağrısı sırasında oluşur. Yakalanmazsa bu istisna
+  /// çağıranın (ör. zamanlayıcı döngüsünün) tamamını keserdi - sıradaki
+  /// diğer ziller de o turda hiç denenmeden atlanırdı. Bu yüzden burada
+  /// yakalanıp `false` döndürülür (ve varsa [onError] ile bildirilir),
+  /// böylece tek bir bozuk ses dosyası diğer zilleri etkilemez.
   Future<bool> playFile(
       String? soundPath, String? defaultSound, double volume) async {
     final path = (soundPath == null || soundPath.isEmpty || soundPath == 'default')
@@ -57,7 +68,12 @@ class AudioPlayerService {
     if (path == null || path.isEmpty) return false;
     await _contextReady;
     await _player.setVolume(volume.clamp(0.0, 1.0));
-    await _player.play(DeviceFileSource(path));
+    try {
+      await _player.play(DeviceFileSource(path));
+    } catch (error) {
+      _onError?.call('Ses çalınamadı: $error');
+      return false;
+    }
     return true;
   }
 

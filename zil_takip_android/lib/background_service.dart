@@ -92,16 +92,16 @@ Future<void> initializeBackgroundService({bool autoStartOnBoot = false}) async {
 void onServiceStart(ServiceInstance service) async {
   DartPluginRegistrant.ensureInitialized();
 
-  final audioPlayer = AudioPlayerService();
+  void log(String message) {
+    service.invoke('log', {'message': message, 'time': DateTime.now().toIso8601String()});
+  }
+
+  final audioPlayer = AudioPlayerService(onError: log);
   final firedToday = <String>{};
   DateTime? firedDate;
   Map<String, String>? timingsCache;
   DateTime? timingsCacheDate;
   bool holidayNoticeShown = false;
-
-  void log(String message) {
-    service.invoke('log', {'message': message, 'time': DateTime.now().toIso8601String()});
-  }
 
   if (service is AndroidServiceInstance) {
     service.on('stopService').listen((event) {
