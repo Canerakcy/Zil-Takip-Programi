@@ -208,15 +208,43 @@ class RemoteControlService {
   }) : pairedDevices = List.of(initialPairedDevices ?? const []);
 
   // ---------- Yaşam döngüsü ----------
+  /// Android'de arka plan servisi (ör. üretici pil yönetimi tarafından)
+  /// öldürülüp aynı işlem (process) içinde yeniden başlatılırsa, ESKİ
+  /// RemoteControlService örneğinin soketlerini kapatan bir kod yolu YOK
+  /// (isolate/engine yok edilirken Dart'a bunu bildiren bir geri çağırım
+  /// bulunmuyor) - bu durumda eski UDP soketi hâlâ bağlı kalabilir ve yeni
+  /// bind() "Address already in use" ile başarısız olup uzaktan erişimi o
+  /// andan itibaren TAMAMEN devre dışı bırakabilirdi (hem eşleştirme isteği
+  /// alma hem gönderilen istekleri yanıtlama). Bunu iki şekilde dayanıklı
+  /// hale getiriyoruz: reusePort ile aynı porta ikinci bir soketin de
+  /// bağlanabilmesine izin veriyoruz (TCP tarafında zaten "shared: true"
+  /// ile aynı koruma vardı), ayrıca geçici bir "adres kullanımda" hatasına
+  /// karşı (ör. TIME_WAIT) birkaç kez kısa aralıklarla yeniden deniyoruz.
   Future<void> start() async {
-    _udpSocket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, pairingUdpPort,
-        reuseAddress: true, reusePort: false);
+    _udpSocket = await _bindWithRetry(
+      () => RawDatagramSocket.bind(InternetAddress.anyIPv4, pairingUdpPort,
+          reuseAddress: true, reusePort: true),
+    );
     _udpSocket!.broadcastEnabled = true;
     _udpSub = _udpSocket!.listen(_onUdpEvent);
 
-    _tcpServer = await ServerSocket.bind(InternetAddress.anyIPv4, controlTcpPort,
-        shared: true);
+    _tcpServer = await _bindWithRetry(
+      () => ServerSocket.bind(InternetAddress.anyIPv4, controlTcpPort, shared: true),
+    );
     _tcpSub = _tcpServer!.listen(_handleTcpConnection);
+  }
+
+  Future<T> _bindWithRetry<T>(Future<T> Function() bind) async {
+    const maxAttempts = 4;
+    for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        return await bind();
+      } on SocketException {
+        if (attempt == maxAttempts) rethrow;
+        await Future.delayed(Duration(milliseconds: 500 * attempt));
+      }
+    }
+    throw StateError('unreachable');
   }
 
   Future<void> stop() async {
