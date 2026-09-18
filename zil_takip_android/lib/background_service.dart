@@ -264,8 +264,8 @@ Future<void> _setUpRemoteControl(
         _handleIncomingPairingRequest(service, name, decide),
     onLog: log,
     deviceName: 'Android Telefon',
-    onDevicesChanged: () {
-      savePairedDevicesRaw(remoteControl.pairedDevices.map((p) => p.toJson()).toList());
+    onDevicesChanged: () async {
+      await savePairedDevicesRaw(remoteControl.pairedDevices.map((p) => p.toJson()).toList());
     },
     initialPairedDevices: (await loadPairedDevicesRaw())
         .map((e) => PairedDevice.fromJson(e))
@@ -329,9 +329,9 @@ Future<void> _setUpRemoteControl(
         {'devices': remoteControl.pairedDevices.map((p) => p.toJson()).toList()});
   });
 
-  service.on('remove_paired_device').listen((event) {
+  service.on('remove_paired_device').listen((event) async {
     final peerId = event?['peer_id'] as String?;
-    if (peerId != null) remoteControl.removePairedDevice(peerId);
+    if (peerId != null) await remoteControl.removePairedDevice(peerId);
     service.invoke('paired_devices_updated',
         {'devices': remoteControl.pairedDevices.map((p) => p.toJson()).toList()});
   });

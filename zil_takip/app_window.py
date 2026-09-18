@@ -1849,6 +1849,14 @@ class App(tk.Tk):
                  "karşı cihaz zili uzaktan çaldırabilir/durdurabilir ve tüm ayarları "
                  "görüntüleyip değiştirebilir. Yalnızca aynı yerel ağda (WiFi/LAN) çalışır.",
             wraplength=760, justify="left").pack(anchor="w", **pad)
+        ttk.Label(
+            host_frame,
+            text="⚠️ Bağlanamıyorsanız: Windows Güvenlik Duvarı bu program için "
+                 "\"Özel\" ve \"Genel\" ağ izinlerinin İKİSİNİ de vermiş olmalı - "
+                 "aksi halde gelen istekler hiç ulaşmadan sessizce engellenir "
+                 "(Ayarlar > Güvenlik Duvarı ve Ağ Koruması > Bir Uygulamanın "
+                 "Güvenlik Duvarından Geçmesine İzin Ver).",
+            wraplength=760, justify="left", foreground="#8a6d00").pack(anchor="w", **pad)
         ttk.Button(host_frame, text="🔑 Eşleştirme Kodu Oluştur", style="Accent.TButton",
                    command=self._generate_pairing_code).pack(anchor="w", **pad)
         # Kod 5-20 hane olabildiğinden, buton ile aynı satıra sığdırmaya

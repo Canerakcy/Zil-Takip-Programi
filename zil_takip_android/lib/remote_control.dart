@@ -161,7 +161,14 @@ class RemoteControlService {
       onPairingRequest;
   final void Function(String message) onLog;
   final String deviceName;
-  final void Function()? onDevicesChanged;
+  /// Eşleşmiş cihaz listesi değiştiğinde (yeni eşleşme, eşleştirme
+  /// kaldırma) çağrılır - çağıran, listeyi kalıcı depolamaya (diske)
+  /// yazmak için kullanır. Future döndürür ve mümkün olan her yerde
+  /// await edilir: arka plan servisi tam bu değişiklikten hemen sonra
+  /// öldürülürse (ör. üretici pil yönetimi), diske yazma işleminin
+  /// "ateşle ve unut" (fire-and-forget) olması değişikliğin hiç
+  /// kaydedilmeden kaybolmasına yol açabilirdi.
+  final Future<void> Function()? onDevicesChanged;
 
   final List<PairedDevice> pairedDevices;
 
@@ -302,7 +309,7 @@ class RemoteControlService {
       _sendUdpTo({'v': protocolVersion, 'type': 'pair_ack'}, addr, port);
 
       var decided = false;
-      void decide(bool approved) {
+      Future<void> decide(bool approved) async {
         if (decided) return;
         decided = true;
         if (approved) {
@@ -313,7 +320,11 @@ class RemoteControlService {
               token: token,
               lastKnownIp: addr.address);
           pairedDevices.add(peer);
-          onDevicesChanged?.call();
+          // Karşı tarafa "eşleştin" demeden ÖNCE diske yazılması beklenir -
+          // aksi halde arka plan servisi tam bu sırada öldürülürse (ör.
+          // üretici pil yönetimi), karşı taraf kendini eşleşmiş sanırken
+          // burada eşleştirme hiç kaydedilmemiş olabilirdi.
+          await onDevicesChanged?.call();
           _sendUdpTo({
             'v': protocolVersion,
             'type': 'pair_response',
@@ -411,7 +422,7 @@ class RemoteControlService {
       if (!completer.isCompleted) completer.complete(result);
     }
 
-    sub = sock.listen((event) {
+    sub = sock.listen((event) async {
       if (event != RawSocketEvent.read) return;
       final datagram = sock.receive();
       if (datagram == null) return;
@@ -443,7 +454,10 @@ class RemoteControlService {
           controlPort: (msg['control_port'] as num?)?.toInt() ?? controlTcpPort,
         );
         pairedDevices.add(peer);
-        onDevicesChanged?.call();
+        // finish(peer)'dan (ve dolayısıyla arayana "eşleşti" denmesinden)
+        // ÖNCE diske yazılması beklenir - bkz. yukarıdaki host tarafındaki
+        // aynı gerekçe (_handleUdpMessage).
+        await onDevicesChanged?.call();
         onStatus("'${peer.name}' ile eşleşti.");
         finish(peer);
       }
@@ -766,7 +780,7 @@ class RemoteControlService {
           // eşleştirmeyi göstermeye devam eder (kullanınca "kimlik
           // doğrulama reddedildi" hatası alır ama listeden hiç temizlenmez).
           pairedDevices.removeWhere((p) => p.token == peer.token);
-          onDevicesChanged?.call();
+          await onDevicesChanged?.call();
           onLog("'${peer.name}' eşleştirmeyi kaldırdı.");
           return {'ok': true};
         default:
@@ -777,10 +791,10 @@ class RemoteControlService {
     }
   }
 
-  void removePairedDevice(String peerId) {
+  Future<void> removePairedDevice(String peerId) async {
     final peer = pairedDevices.where((p) => p.peerId == peerId).firstOrNull;
     pairedDevices.removeWhere((p) => p.peerId == peerId);
-    onDevicesChanged?.call();
+    await onDevicesChanged?.call();
     if (peer != null) {
       // Karşı tarafa da haber ver ki orada da otomatik temizlensin - iyi
       // niyetli (best-effort) bir bildirimdir: karşı cihaz kapalıysa/ağda

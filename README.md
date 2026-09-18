@@ -141,7 +141,8 @@ farklı olduğu için tamamen size bağlı):
   da birbirinin zilini uzaktan çaldırabilir/durdurabilir ve tüm ayarlarını
   görüntüleyip değiştirebilir. Not: bazı misafir/genel WiFi ağlarında
   cihazlar arası "client isolation" açık olabilir - bu durumda eşleştirme
-  çalışmaz, aynı ağda olmanız yeterli olmayabilir.
+  çalışmaz, aynı ağda olmanız yeterli olmayabilir. Bağlantı sorunu
+  yaşıyorsanız bkz. aşağıdaki **"Bağlantı/eşleştirme sorunları"** bölümü.
 - **Dosyaya log kaydı**: Tüm zil kayıtları, pencere kapansa bile
   incelenebilmesi için ayrıca bir log dosyasına da yazılır.
 
@@ -212,6 +213,38 @@ pip install -r requirements.txt
 pyinstaller zil_takip.spec --noconfirm --clean
 # Sonuç: zil_takip\dist\CeselsanZilTakip.exe
 ```
+
+## Bağlantı/eşleştirme sorunları
+
+İki cihaz eşleşmiyor, eşleşme koparıyor/"eşleşen cihazlar kayboluyor" gibi
+sorunlar genelde şu üç şeyden biri:
+
+1. **Windows Güvenlik Duvarı.** Uygulama önce kurulup ilk kez "Uzaktan
+   Erişim" sekmesi açıldığında (ya da bir eşleştirme kodu üretildiğinde),
+   Windows normalde **"Windows Defender Güvenlik Duvarı bu uygulamanın
+   bazı özelliklerini engelledi"** diye bir uyarı gösterip özel (Private)
+   ve genel (Public) ağlar için izin ister. Bu uyarıyı kapatır/"İptal"
+   derseniz ya da fark etmezseniz, bu bilgisayara gelen TÜM eşleştirme/
+   kontrol istekleri (UDP 47601, TCP 47602) sessizce reddedilir - program
+   hiçbir hata göstermeden "cihaz bulunamadı" der, çünkü istek bu
+   bilgisayara hiç ulaşmaz. Kontrol etmek için: **Ayarlar > Gizlilik ve
+   Güvenlik > Windows Güvenliği > Güvenlik Duvarı ve Ağ Koruması >
+   Bir Uygulamanın Güvenlik Duvarından Geçmesine İzin Ver** - listede
+   ZilTakipProgrami.exe için hem Özel hem Genel işaretli olmalı; yoksa
+   "Ayarları Değiştir" ile ekleyip işaretleyin (yönetici izni ister).
+   Eviniz/işyeriniz ağı "Genel (Public)" olarak ayarlıysa (bazı
+   yönlendiricilerde/ilk bağlantıda varsayılan budur), ağı **Özel
+   (Private)** yapmanız da işe yarayabilir - **Ayarlar > Ağ ve İnternet**.
+2. **Aynı ağda olmama / "client isolation".** İki cihaz da aynı WiFi/LAN'a
+   bağlı olmalı (biri mobil veri/farklı bir ağdaysa hiç çalışmaz);
+   misafir ağlarda ve bazı yönlendiricilerde varsayılan açık olan
+   "client/AP isolation" özelliği de aynı ağdaki cihazların birbirini
+   UDP yayınıyla bulmasını engeller.
+3. **Android tarafında arka plan servisinin üretici tarafından
+   öldürülmesi** (Samsung/Xiaomi/Huawei vb.) - bu durumda Android
+   telefon, Windows'tan gelen isteklere cevap veremeyecek kadar "uykuda"
+   olabilir. Bkz. yukarıdaki **"Arka planda kesintisiz çalışması için"**
+   bölümü ve uygulama içi **Genel > Üretici Pil Ayarları** kısayolu.
 
 ## Notlar
 
