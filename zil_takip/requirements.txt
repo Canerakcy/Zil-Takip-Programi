@@ -1,8 +1,15 @@
-numpy
-sounddevice
-soundfile
-requests
-pystray
-Pillow
-pyinstaller
-pyinstaller-hooks-contrib
+# Sürümler kasıtlı olarak sabitlendi: bu, Windows 7 hedefiyle (Python 3.8,
+# bkz. .github/workflows/build-windows-exe.yml) test edilip gerçekten
+# derlenip çalıştığı doğrulanmış son bilinen iyi (known-good) küme -
+# sabitlenmezse gelecekte otomatik çekilecek daha yeni bir sürüm, Windows
+# 7'de sessizce bozulan bir derleme/çalışma zamanı sorununa yol açabilir.
+# Yükseltmeden önce gerçek bir Windows 7 makinesinde/8.1+ regresyon
+# olmadığını test edin.
+numpy==1.24.4
+sounddevice==0.5.6
+soundfile==0.13.1
+requests==2.32.4
+pystray==0.19.5
+Pillow==10.4.0
+pyinstaller==6.22.2
+pyinstaller-hooks-contrib==2026.7

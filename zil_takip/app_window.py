@@ -1300,12 +1300,26 @@ class App(tk.Tk):
                   foreground=[("selected", "white")])
 
     def _prompt_first_run_sound(self) -> None:
-        messagebox.showinfo(
-            APP_TITLE,
-            "Programın kendi ürettiği bir zil sesi yoktur.\n\n"
-            "Lütfen bilgisayarınızdan çalınmasını istediğiniz zil sesi dosyasını "
-            "(wav/mp3/ogg/flac) seçin.")
-        self._choose_default_sound()
+        # Kullanıcı programı açar açmaz (300ms içinde) kapatırsa pencere bu
+        # gecikmeli çağrı ateşlenmeden önce yok edilmiş olabilir. Ayrıca bu
+        # diyalog (messagebox) modal olduğu için kendi iç bekleme döngüsünü
+        # çalıştırır - bu bekleme sırasında bile sistem tepsisi "Çıkış"ı
+        # işlenmeye devam eder (bkz. _poll_tray_queue, kendi after() zamanlayıcısı
+        # bu iç döngü sırasında da tetiklenir); yani kullanıcı bu diyalog TAM
+        # AÇIKKEN tepsiden çıkış yapabilir ve pencere tam o sırada yok edilebilir.
+        # Her iki durumda da TclError fırlar - bu yüzden hem baştaki kontrol
+        # hem de geniş try/except gerekli.
+        if not self.winfo_exists():
+            return
+        try:
+            messagebox.showinfo(
+                APP_TITLE,
+                "Programın kendi ürettiği bir zil sesi yoktur.\n\n"
+                "Lütfen bilgisayarınızdan çalınmasını istediğiniz zil sesi dosyasını "
+                "(wav/mp3/ogg/flac) seçin.")
+            self._choose_default_sound()
+        except tk.TclError:
+            pass
 
     # ---------- UI kurulumu ----------
     def _build_ui(self) -> None:
@@ -1513,6 +1527,11 @@ class App(tk.Tk):
                 RING_KIND_LABELS.get(kind, kind), status))
 
     def _update_clock(self) -> None:
+        # Pencere kapatılmışsa (gerçek çıkış - tepsiye küçültme değil)
+        # kendini tekrar zamanlamadan çık; aksi halde bu döngü sonsuza kadar
+        # kendini yeniden çağırıp yok edilmiş pencerede TclError fırlatırdı.
+        if not self.winfo_exists():
+            return
         now = datetime.now()
         gun = DAY_NAMES[now.weekday()]
         self.clock_var.set(f"{now.strftime('%d.%m.%Y')}  {gun}   {now.strftime('%H:%M:%S')}")
@@ -2358,7 +2377,11 @@ class App(tk.Tk):
 
     # ---------- Genel: tekil örnek (exe tekrar açılırsa) ----------
     def _poll_instance_queue(self) -> None:
-        if self._instance is None:
+        # self._instance hiçbir zaman None'a dönmediği için (bkz. __init__),
+        # pencere gerçekten kapatıldıktan (destroy) sonra da bu kontrol tek
+        # başına yetersizdi - döngü sonsuza kadar kendini yeniden çağırıp
+        # yok edilmiş pencerede TclError fırlatırdı; winfo_exists() bunu önler.
+        if self._instance is None or not self.winfo_exists():
             return
         try:
             while True:
