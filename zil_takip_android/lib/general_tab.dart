@@ -261,7 +261,9 @@ class _GeneralTabState extends State<GeneralTab> {
                 ListTile(
                   title: const Text('Pil Optimizasyonundan Muaf Tut'),
                   subtitle: Text(_batteryOptimizationIgnored == true
-                      ? 'Etkin - Android arka plan servisini kapatmayacak.'
+                      ? 'Etkin - ama bazı telefon üreticilerinde (ör. Samsung, '
+                          'Xiaomi, Huawei) bu YETERLİ OLMAYABİLİR; aşağıdaki '
+                          '"Üretici Pil Ayarları" adımını da kontrol edin.'
                       : 'Kapalı - bazı telefonlarda (ör. Samsung) servis bir '
                           'süre sonra durdurulabilir, açmanız önerilir.'),
                   trailing: _batteryOptimizationIgnored == true
@@ -270,6 +272,22 @@ class _GeneralTabState extends State<GeneralTab> {
                           onPressed: _requestBatteryOptimizationExemption,
                           child: const Text('Aç'),
                         ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('Üretici Pil Ayarları (Samsung/Xiaomi/Huawei vb.)'),
+                  subtitle: const Text(
+                      'Yukarıdaki muafiyet açık olsa bile, bazı üreticiler ayrıca '
+                      'KENDİ pil yönetimlerinden uygulamayı "uyutabilir". Samsung\'da: '
+                      'Ayarlar > Pil ve Cihaz Bakımı > Pil > Arka Plan Kullanım '
+                      'Sınırları > "Uyku Modundaki Uygulamalar" listesinde Zil Takip '
+                      'varsa çıkarın; ayrıca bu uygulamanın kendi Pil ayarından '
+                      '"Kısıtlanmamış/Sınırsız" seçili olduğundan emin olun.'),
+                  trailing: FilledButton(
+                    onPressed: () => openAppSettings(),
+                    child: const Text('Ayarları Aç'),
+                  ),
+                  isThreeLine: true,
                 ),
               ],
             ),

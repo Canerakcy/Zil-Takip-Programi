@@ -59,11 +59,18 @@ Android karşılığı işletim sistemi tarafından otomatik yapılır).
 aksi halde bazı telefonlar (özellikle Samsung) bir süre sonra arka plan
 servisini durdurup zilleri kesebilir. İzni kaçırdıysanız **Genel**
 sekmesinden "Pil Optimizasyonundan Muaf Tut" satırındaki **Aç**
-butonuyla tekrar açabilirsiniz. Bazı Samsung telefonlarda ayrıca
-**Ayarlar > Pil > Arka Plan Kullanımı Sınırları > Uyku Modundaki
-Uygulamalar** listesinde Ceselsan Zil Takip varsa oradan çıkarmanız
-gerekebilir - üretici bu listeyi uygulama içinden kontrol edilemeyen,
-ayrı bir kısıtlama olarak tutar.
+butonuyla tekrar açabilirsiniz.
+
+**Bu izin TEK BAŞINA yeterli olmayabilir:** Samsung, Xiaomi, Huawei, Oppo/
+Vivo gibi üreticiler, standart Android iznini görmezden gelen KENDİ pil
+yönetim sistemlerini kullanır. Samsung'da: **Ayarlar > Pil ve Cihaz
+Bakımı > Pil > Arka Plan Kullanım Sınırları > Uyku Modundaki
+Uygulamalar** (ya da "Derin Uyku Modundaki Uygulamalar") listesinde Zil
+Takip varsa oradan çıkarın; ayrıca uygulamanın kendi Pil ayarından
+"Kısıtlanmamış/Sınırsız" seçili olduğundan emin olun - bunlar uygulama
+içinden kontrol edilemeyen, üreticiye özgü ayrı kısıtlamalardır. **Genel**
+sekmesindeki **"Üretici Pil Ayarları"** satırındaki **Ayarları Aç**
+butonu, doğrudan bu uygulamanın sistem ayarları sayfasını açar.
 
 ## Ekran Görüntüleri
 
