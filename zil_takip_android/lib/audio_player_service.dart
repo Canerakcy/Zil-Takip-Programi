@@ -35,6 +35,16 @@ class AudioPlayerService {
       AudioContext(
         android: const AudioContextAndroid(
           audioFocus: AndroidAudioFocus.none,
+          // Varsayılan "media" (müzik) kategorisi, Android'de kablolu/
+          // Bluetooth kulaklık takılıyken devreye giren "güvenli dinleme
+          // seviyesi" otomatik ses sınırlamasına tabidir - bu da jak
+          // takıldığında zilin belirgin şekilde daha kısık çalmasına yol
+          // açar (kullanıcı şikayeti: "jak taktığımızda sesi az veriyor").
+          // "alarm" kullanım türü (çalar saat/alarm uygulamalarının
+          // kullandığı) bu sınırlamadan muaftır ve zaten anlam olarak da
+          // bu uygulamanın amacına (alarm/hatırlatma sesi) tam uyar.
+          usageType: AndroidUsageType.alarm,
+          contentType: AndroidContentType.sonification,
         ),
       ),
     );
