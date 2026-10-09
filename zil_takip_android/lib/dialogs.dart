@@ -352,6 +352,7 @@ class _HolidayDialog extends StatefulWidget {
 class _HolidayDialogState extends State<_HolidayDialog> {
   late final TextEditingController _labelController;
   DateTime? _date;
+  late bool _yearly;
   late bool _ring;
   late TimeOfDay _ringTime;
   String? _ringSound;
@@ -363,6 +364,7 @@ class _HolidayDialogState extends State<_HolidayDialog> {
     _labelController = TextEditingController(text: e?.label ?? '');
     final existingDate = e?.date;
     _date = existingDate != null ? DateTime.tryParse(existingDate) : null;
+    _yearly = e?.yearly ?? false;
     _ring = e?.ring ?? false;
     final existingRingTime = e?.ringTime;
     if (existingRingTime != null) {
@@ -419,6 +421,7 @@ class _HolidayDialogState extends State<_HolidayDialog> {
         Holiday(
           date: dateStr,
           label: _labelController.text.trim(),
+          yearly: _yearly,
           ring: _ring,
           ringTime: _ring ? _ringTimeText : null,
           ringSound: _ring ? _ringSound : null,
@@ -449,6 +452,16 @@ class _HolidayDialogState extends State<_HolidayDialog> {
               controller: _labelController,
               decoration:
                   const InputDecoration(labelText: 'Açıklama (ör. Bayram)'),
+            ),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text('Her yıl bu tarihte tekrarla'),
+              subtitle: const Text(
+                  'İşaretlerseniz yıl kısmı yok sayılır, sadece gün/ay her '
+                  'yıl tekrar eder (ör. her 10 Kasım).'),
+              value: _yearly,
+              onChanged: (value) => setState(() => _yearly = value ?? false),
             ),
             const Divider(height: 24),
             CheckboxListTile(

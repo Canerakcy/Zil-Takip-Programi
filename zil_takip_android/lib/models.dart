@@ -151,9 +151,13 @@ class FridayOffset {
 class Holiday {
   String date; // "YYYY-MM-DD"
   String label;
+  // True ise [date]'in yıl kısmı yok sayılır, sadece gün/ay her yıl
+  // tekrar eder (ör. her 10 Kasım). false ise sadece [date]'teki tek bir
+  // yılda geçerlidir.
+  bool yearly;
   // Varsayılan olarak tatil günlerinde hiç zil çalmaz. Bu true ise, normal
   // program/namaz vakitleri yine çalmaz ama [ringTime]'da [ringSound] ile
-  // tek seferlik özel bir zil çalar (ör. bir anma töreni saati).
+  // özel bir zil çalar (ör. bir anma töreni saati).
   bool ring;
   String? ringTime; // "HH:MM", yalnızca ring == true ise kullanılır
   String? ringSound;
@@ -161,6 +165,7 @@ class Holiday {
   Holiday({
     required this.date,
     required this.label,
+    this.yearly = false,
     this.ring = false,
     this.ringTime,
     this.ringSound,
@@ -169,6 +174,7 @@ class Holiday {
   factory Holiday.fromJson(Map<String, dynamic> json) => Holiday(
         date: json['date'] as String,
         label: json['label'] as String? ?? '',
+        yearly: json['yearly'] as bool? ?? false,
         ring: json['ring'] as bool? ?? false,
         ringTime: json['ring_time'] as String?,
         ringSound: json['ring_sound'] as String?,
@@ -177,6 +183,7 @@ class Holiday {
   Map<String, dynamic> toJson() => {
         'date': date,
         'label': label,
+        'yearly': yearly,
         'ring': ring,
         'ring_time': ringTime,
         'ring_sound': ringSound,

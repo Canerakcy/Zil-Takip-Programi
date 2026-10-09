@@ -99,11 +99,13 @@ def default_config() -> dict[str, Any]:
         "prayer_times": default_prayer_times(),
         "minimize_to_tray": True,
         "start_with_windows": False,
-        # {"date": "YYYY-AA-GG", "label": "...", "ring": bool,
+        # {"date": "YYYY-AA-GG", "label": "...", "yearly": bool, "ring": bool,
         #  "ring_time": "HH:MM"|None, "ring_sound": str|None} formatında.
+        # "yearly" True ise yıl kısmı yok sayılır, sadece gün/ay her yıl
+        # tekrar eder (scheduler.py'de eşleşme buna göre yapılır).
         # "ring" False ise bu tarihte hiç zil çalmaz (klasik tatil günü);
         # True ise normal program çalmaz ama ring_time'da ring_sound ile
-        # tek seferlik özel bir zil çalar.
+        # özel bir zil çalar.
         "holidays": [],
         # Yangın butonu için seçilen ses; None ise varsayılan ses kullanılır.
         "fire_button_sound": None,

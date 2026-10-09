@@ -57,8 +57,11 @@ class BellScheduler(threading.Thread):
 
         current_hhmm = now.strftime("%H:%M")
 
+        today_md = today.strftime("%m-%d")
         holiday = next((h for h in cfg.get("holidays", [])
-                         if h.get("date") == today.isoformat()), None)
+                         if h.get("date") == today.isoformat()
+                         or (h.get("yearly") and str(h.get("date", ""))[5:] == today_md)),
+                        None)
         if holiday is not None:
             label = holiday.get("label") or "Tatil günü"
             if not self._holiday_notice_shown:

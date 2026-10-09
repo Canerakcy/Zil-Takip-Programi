@@ -404,10 +404,11 @@ class _GeneralTabState extends State<GeneralTab> {
           Card(
             child: ListTile(
               title: Text(holiday.label.isNotEmpty ? holiday.label : 'Tatil'),
-              subtitle: Text(holiday.ring
-                  ? '${holiday.date} • Özel zil: ${holiday.ringTime ?? '--:--'} '
-                      '(${soundDisplayName(holiday.ringSound)})'
-                  : holiday.date),
+              subtitle: Text((holiday.ring
+                      ? '${holiday.date} • Özel zil: ${holiday.ringTime ?? '--:--'} '
+                          '(${soundDisplayName(holiday.ringSound)})'
+                      : holiday.date) +
+                  (holiday.yearly ? ' • Her yıl' : '')),
               onTap: () => _editHoliday(holiday),
               trailing: IconButton(
                 icon: const Icon(Icons.delete_outline),

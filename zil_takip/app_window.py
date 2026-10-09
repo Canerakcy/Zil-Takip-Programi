@@ -61,11 +61,12 @@ def format_sound(sound: Optional[str]) -> str:
     return sound
 
 
-def format_holiday_date(iso_date: str) -> str:
+def format_holiday_date(iso_date: str, yearly: bool = False) -> str:
     try:
-        return datetime.strptime(iso_date, "%Y-%m-%d").strftime("%d.%m.%Y")
+        formatted = datetime.strptime(iso_date, "%Y-%m-%d").strftime("%d.%m.%Y")
     except ValueError:
-        return iso_date
+        formatted = iso_date
+    return f"{formatted} (Her yıl)" if yearly else formatted
 
 
 class EntryDialog(tk.Toplevel):
@@ -262,6 +263,7 @@ class HolidayDialog(tk.Toplevel):
             value=format_holiday_date(holiday["date"]) if holiday.get("date")
             else datetime.now().strftime("%d.%m.%Y"))
         self.label_var = tk.StringVar(value=holiday.get("label", ""))
+        self.yearly_var = tk.BooleanVar(value=bool(holiday.get("yearly")))
         self.ring_var = tk.BooleanVar(value=bool(holiday.get("ring")))
         self.ring_time_var = tk.StringVar(value=holiday.get("ring_time") or "09:00")
         ring_sound = holiday.get("ring_sound")
@@ -276,36 +278,44 @@ class HolidayDialog(tk.Toplevel):
         ttk.Entry(self, textvariable=self.label_var, width=32).grid(
             row=1, column=1, columnspan=2, sticky="we", **pad)
 
+        ttk.Checkbutton(self, text="Her yıl bu tarihte tekrarla (ör. her 10 Kasım)",
+                         variable=self.yearly_var).grid(
+            row=2, column=0, columnspan=3, sticky="w", **pad)
+        ttk.Label(self, text="İşaretlerseniz yıl kısmı yok sayılır, sadece gün/ay her yıl\n"
+                              "tekrar eder (ör. 2026, 2027, 2028... hep aynı gün).",
+                  foreground="#666666", justify="left").grid(
+            row=3, column=0, columnspan=3, sticky="w", padx=10)
+
         ttk.Separator(self, orient="horizontal").grid(
-            row=2, column=0, columnspan=3, sticky="we", padx=10, pady=(6, 2))
+            row=4, column=0, columnspan=3, sticky="we", padx=10, pady=(6, 2))
 
         ttk.Checkbutton(self, text="Bu tarihte özel bir zil çalsın mı?",
                          variable=self.ring_var, command=self._update_ring_state).grid(
-            row=3, column=0, columnspan=3, sticky="w", **pad)
+            row=5, column=0, columnspan=3, sticky="w", **pad)
         ttk.Label(self, text="İşaretlemezseniz bu tarihte hiç zil çalmaz (klasik tatil günü).\n"
                               "İşaretlerseniz normal program/namaz vakitleri yine çalmaz, ama\n"
                               "aşağıdaki saatte tek seferlik özel bir zil çalar.",
                   foreground="#666666", justify="left").grid(
-            row=4, column=0, columnspan=3, sticky="w", padx=10)
+            row=6, column=0, columnspan=3, sticky="w", padx=10)
 
         self.ring_time_label = ttk.Label(self, text="Saat (SS:DD):")
-        self.ring_time_label.grid(row=5, column=0, sticky="w", **pad)
+        self.ring_time_label.grid(row=7, column=0, sticky="w", **pad)
         self.ring_time_entry = ttk.Entry(self, textvariable=self.ring_time_var, width=10)
-        self.ring_time_entry.grid(row=5, column=1, sticky="w", **pad)
+        self.ring_time_entry.grid(row=7, column=1, sticky="w", **pad)
 
         self.ring_sound_label = ttk.Label(self, text="Ses dosyası:")
-        self.ring_sound_label.grid(row=6, column=0, sticky="w", **pad)
+        self.ring_sound_label.grid(row=8, column=0, sticky="w", **pad)
         self.ring_sound_entry = ttk.Entry(self, textvariable=self.ring_sound_var, width=28)
-        self.ring_sound_entry.grid(row=6, column=1, sticky="we", **pad)
+        self.ring_sound_entry.grid(row=8, column=1, sticky="we", **pad)
         self.ring_sound_button = ttk.Button(self, text="📁 Seç...", command=self._choose_ring_sound)
-        self.ring_sound_button.grid(row=6, column=2, sticky="w", **pad)
+        self.ring_sound_button.grid(row=8, column=2, sticky="w", **pad)
         self.ring_sound_hint = ttk.Label(
             self, text="Boş bırakılırsa Ses Ayarları'ndaki varsayılan ses çalınır.",
             foreground="#666666")
-        self.ring_sound_hint.grid(row=7, column=0, columnspan=3, sticky="w", padx=10)
+        self.ring_sound_hint.grid(row=9, column=0, columnspan=3, sticky="w", padx=10)
 
         btn_frame = ttk.Frame(self)
-        btn_frame.grid(row=8, column=0, columnspan=3, pady=10)
+        btn_frame.grid(row=10, column=0, columnspan=3, pady=10)
         ttk.Button(btn_frame, text="💾 Kaydet", style="Accent.TButton",
                    command=self._on_save).pack(side="left", padx=6)
         ttk.Button(btn_frame, text="İptal", command=self.destroy).pack(side="left", padx=6)
@@ -345,6 +355,7 @@ class HolidayDialog(tk.Toplevel):
         self.result = {
             "date": parsed.strftime("%Y-%m-%d"),
             "label": self.label_var.get().strip(),
+            "yearly": self.yearly_var.get(),
             "ring": ring,
             "ring_time": ring_time if ring else None,
             "ring_sound": (self.ring_sound_var.get().strip() or None) if ring else None,
@@ -973,7 +984,8 @@ class ConfigTabsMixin:
             ring_text = f"{holiday.get('ring_time')} - {format_sound(holiday.get('ring_sound'))}" \
                 if holiday.get("ring") else "(Zil çalmaz)"
             self.holidays_tree.insert("", "end", iid=holiday["date"], tags=(tag,), values=(
-                format_holiday_date(holiday.get("date", "")), holiday.get("label", ""), ring_text))
+                format_holiday_date(holiday.get("date", ""), bool(holiday.get("yearly"))),
+                holiday.get("label", ""), ring_text))
 
     def _add_holiday(self) -> None:
         dialog = HolidayDialog(self)
@@ -2441,7 +2453,8 @@ class App(tk.Tk):
             ring_text = f"{holiday.get('ring_time')} - {format_sound(holiday.get('ring_sound'))}" \
                 if holiday.get("ring") else "(Zil çalmaz)"
             self.holidays_tree.insert("", "end", iid=holiday["date"], tags=(tag,), values=(
-                format_holiday_date(holiday.get("date", "")), holiday.get("label", ""), ring_text))
+                format_holiday_date(holiday.get("date", ""), bool(holiday.get("yearly"))),
+                holiday.get("label", ""), ring_text))
 
     def _add_holiday(self) -> None:
         dialog = HolidayDialog(self)
