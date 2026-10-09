@@ -54,13 +54,48 @@ class GeneralTab extends StatefulWidget {
 
 class _GeneralTabState extends State<GeneralTab> {
   bool? _batteryOptimizationIgnored;
+  bool? _notificationPermissionGranted;
 
   @override
   void initState() {
     super.initState();
     if (!widget.isRemote) {
       _refreshBatteryOptimizationStatus();
+      _refreshNotificationPermissionStatus();
     }
+  }
+
+  /// Android 13+'ta bildirim izni verilmemişse, arka plan servisinin
+  /// zorunlu kalıcı bildirimi hiç gösterilemez - bu sadece kozmetik bir
+  /// eksiklik değildir: bildirimi gösteremeyen bir "ön plan servisi"
+  /// gerçek ön plan korumasını ALAMAZ. Sonuç olarak uygulama sadece
+  /// görünürken/en son kullanılan uygulamayken çalışır gibi görünür
+  /// (işlem zaten yüksek öncelikli olduğu için), ama arka plana alınır
+  /// alınmaz (ekran kilidi değil, başka bir uygulamaya geçiş) Android
+  /// tarafından anında durdurulur - "arka planda hiçbir şey çalışmıyor"
+  /// şikayetinin en olası gerçek nedeni budur, pil optimizasyonu değil.
+  Future<void> _refreshNotificationPermissionStatus() async {
+    try {
+      final status = await Permission.notification.status;
+      if (mounted) setState(() => _notificationPermissionGranted = status.isGranted);
+    } catch (_) {
+      // Bu platformda/ortamda desteklenmiyor olabilir.
+    }
+  }
+
+  Future<void> _requestNotificationPermission() async {
+    try {
+      final status = await Permission.notification.request();
+      // Kullanıcı daha önce bir kez reddetmişse Android bu çağrıda sistem
+      // diyaloğunu tekrar GÖSTERMEZ, sessizce "denied" döner - bu durumda
+      // tek çözüm Ayarlar'dan elle açmaktır.
+      if (status.isPermanentlyDenied || status.isDenied) {
+        await openAppSettings();
+      }
+    } catch (_) {
+      // Bu platformda/ortamda desteklenmiyor olabilir.
+    }
+    await _refreshNotificationPermissionStatus();
   }
 
   Future<void> _refreshBatteryOptimizationStatus() async {
@@ -256,6 +291,26 @@ class _GeneralTabState extends State<GeneralTab> {
                     widget.onChanged();
                     initializeBackgroundService(autoStartOnBoot: value);
                   },
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  title: const Text('Bildirim İzni'),
+                  subtitle: Text(_notificationPermissionGranted == true
+                      ? 'Etkin.'
+                      : 'Kapalı - bu sadece bildirim simgesini gizlemez: izin yoksa '
+                          'arka plan servisi kalıcı bildirimini hiç gösteremez, bu da '
+                          'servisin gerçek "ön plan" korumasını alamaması anlamına '
+                          'gelir. Sonuç: uygulama görünürken çalışır gibi görünür ama '
+                          'arka plana alınır alınmaz (ekran kilidi değil, başka bir '
+                          'uygulamaya geçiş) hiçbir şey yapmaz. Zil/bağlantının arka '
+                          'planda güvenilir çalışması için bu İZİN ŞARTTIR.'),
+                  trailing: _notificationPermissionGranted == true
+                      ? const Icon(Icons.check_circle, color: Colors.green)
+                      : FilledButton(
+                          onPressed: _requestNotificationPermission,
+                          child: const Text('Aç'),
+                        ),
+                  isThreeLine: true,
                 ),
                 const Divider(height: 1),
                 ListTile(

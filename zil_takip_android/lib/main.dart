@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'background_service.dart';
 import 'config_store.dart';
@@ -18,6 +19,22 @@ void main() {
 
 Future<void> _setUpBackgroundService() async {
   try {
+    // Bildirim izni, arka plan servisi başlamadan ÖNCE istenip
+    // sonuçlanmalı: servis başlar başlamaz kalıcı bildirimini göstermeye
+    // çalışır (bkz. BackgroundService.updateNotificationInfo native
+    // tarafta) - izin dialoğu bundan SONRA cevaplanırsa (home_page.dart'ta
+    // ayrıca da istenir ama o, HomePage ilk çerçevesi çizildikten sonra,
+    // bu fonksiyonla yarış halinde çalışır) bu ilk gösterme denemesi
+    // izinsiz başarısız olur ve - kozmetik bir eksiklik değil, servis
+    // gerçek "ön plan" korumasını alamadığı için - uygulama arka plana
+    // alınır alınmaz (ekran kilidi değil, başka bir uygulamaya geçiş)
+    // çalışmayı durdurur. İzin burada, servisten önce ve awaited isteniyor
+    // ki ilk gösterme denemesi doğru izin durumuyla yapılsın.
+    try {
+      await Permission.notification.request();
+    } catch (_) {
+      // Bu platformda/ortamda izin isteği desteklenmiyor olabilir.
+    }
     final config = await loadConfig().timeout(const Duration(seconds: 10));
     await initializeBackgroundService(autoStartOnBoot: config.startOnBoot)
         .timeout(const Duration(seconds: 10));
